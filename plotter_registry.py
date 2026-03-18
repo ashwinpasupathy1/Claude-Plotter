@@ -381,9 +381,9 @@ _REGISTRY_SPECS = [
     ),
     PlotTypeConfig(
         key="area_chart", label="Area Chart", fn_name="plotter_area_chart",
-        tab_mode="bar", stats_tab="standard",
-        validate="_validate_bar",
-        has_points=False, has_error_bars=True, has_legend=True, has_stats=False, x_continuous=False,
+        tab_mode="line", stats_tab="standard",
+        validate="_validate_line",
+        has_points=False, has_error_bars=False, has_legend=True, has_stats=True, x_continuous=False,
         axes_has_bar_width=False, axes_has_line_opts=True,
         extra_collect=lambda app, kw: kw.update({
             "stacked":    False,
@@ -402,9 +402,9 @@ _REGISTRY_SPECS = [
     ),
     PlotTypeConfig(
         key="qq_plot", label="Q-Q Plot", fn_name="plotter_qq_plot",
-        tab_mode="bar", stats_tab="standard",
+        tab_mode="bar", stats_tab="column_stats",
         validate="_validate_bar",
-        has_points=True, has_error_bars=False, has_legend=True, has_stats=False, x_continuous=False,
+        has_points=True, has_error_bars=False, has_legend=False, has_stats=False, x_continuous=False,
         axes_has_bar_width=False, axes_has_line_opts=False,
         extra_collect=lambda app, kw: kw.update({
             "show_ci_band": True,
@@ -435,7 +435,7 @@ _REGISTRY_SPECS = [
     ),
     PlotTypeConfig(
         key="pyramid", label="Pyramid", fn_name="plotter_pyramid",
-        tab_mode="bar", stats_tab="standard",
+        tab_mode="grouped_bar", stats_tab="standard",
         validate="_validate_pyramid",
         has_points=False, has_error_bars=False, has_legend=True, has_stats=False, x_continuous=False,
         axes_has_bar_width=True, axes_has_line_opts=False,
@@ -445,10 +445,31 @@ _REGISTRY_SPECS = [
         key="ecdf", label="ECDF", fn_name="plotter_ecdf",
         tab_mode="bar", stats_tab="standard",
         validate="_validate_bar",
-        has_points=True, has_error_bars=False, has_legend=True, has_stats=False, x_continuous=False,
+        has_points=False, has_error_bars=False, has_legend=True, has_stats=True, x_continuous=False,
         axes_has_bar_width=False, axes_has_line_opts=True,
         extra_collect=lambda app, kw: kw.update({
             "complementary": False,
         }),
     ),
 ]
+
+
+# ---------------------------------------------------------------------------
+# Keyboard shortcuts  -  Command+1 through Command+9 → chart type keys
+# ---------------------------------------------------------------------------
+
+KEYBOARD_SHORTCUTS = {
+    1: "bar",
+    2: "line",
+    3: "grouped_bar",
+    4: "box",
+    5: "scatter",
+    6: "violin",
+    7: "kaplan_meier",
+    8: "heatmap",
+    9: "histogram",
+}
+
+# Note: this maps Command+1 through Command+9 to chart types.
+# The actual keybinding happens in the app (Agent F), but the
+# mapping is defined here as the single source of truth.

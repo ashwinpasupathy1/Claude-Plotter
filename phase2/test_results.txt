@@ -1,0 +1,964 @@
+/workspaces/Claude-Prism/plotter_functions.py:1324: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=figsize, dpi=_DPI)
+/workspaces/Claude-Prism/plotter_functions.py:921: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`). Consider using `matplotlib.pyplot.close()`.
+  fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SUITE: comprehensive  →  test_comprehensive.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 0 — Hallucination / Public Symbol Audit
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  All expected public symbols exist in plotter_functions
+  ✓  CURVE_MODELS registry complete (11 models)
+  ✓  All 16 plot functions are callable
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 1 — Statistical Engine Correctness
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  Parametric 2-group uses Welch's t-test (equal_var=False)
+  ✓  Student's t-test NOT used for unequal-variance groups
+  ✓  Paired 2-group uses ttest_rel
+  ✓  Paired 3-group produces 3 Holm-corrected paired t-test pairs
+  ✓  Non-parametric 2-group uses Mann-Whitney U
+  ✓  Non-parametric 3-group: KW gating blocks post-hoc when ns
+  ✓  Non-parametric 3-group: KW + Dunn yields 3 pairs
+  ✓  Parametric Tukey HSD 3-group: 3 pairs
+  ✓  Parametric Bonferroni 3-group: 3 pairs
+  ✓  Parametric Sidak 3-group: 3 pairs
+  ✓  Parametric Fisher LSD 3-group: 3 pairs
+  ✓  Parametric Dunnett vs control: 2 pairs, all vs Control
+  ✓  Permutation test 2-group returns valid p-value
+  ✓  All 4 MC correction methods return valid p in [0,1]
+  ✓  _p_to_stars thresholds match GraphPad Prism exactly
+  ✓  check_normality: normal → pass, skewed → fail
+  ✓  normality_warning fires for non-normal + parametric
+  ✓  normality_warning silent for non-parametric test
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 2 — Bar Chart
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] Bar: basic default
+  ✓  [A] Bar: error=sd
+  ✓  [A] Bar: error=ci95
+  ✓  [A] Bar: show_stats + parametric
+  ✓  [A] Bar: show_stats + nonparametric
+  ✓  [A] Bar: show_stats + paired (2-group)
+  ✓  [A] Bar: show_stats + permutation
+  ✓  [A] Bar: posthoc=Bonferroni
+  ✓  [A] Bar: posthoc=Sidak
+  ✓  [A] Bar: posthoc=Fisher LSD
+  ✓  [A] Bar: posthoc=Dunnett
+  ✓  [A] Bar: mc=Bonferroni
+  ✓  [A] Bar: mc=BH FDR
+  ✓  [A] Bar: mc=None
+  ✓  [A] Bar: show_p_values
+  ✓  [A] Bar: show_effect_size
+  ✓  [A] Bar: show_test_name
+  ✓  [A] Bar: gridlines=True
+  ✓  [A] Bar: horizontal=True
+  ✓  [A] Bar: yscale=log
+  ✓  [A] Bar: error_below_bar=True
+  ✓  [A] Bar: show_median=True
+  ✓  [A] Bar: open_points=True
+  ✓  [A] Bar: ref_line
+  ✓  [A] Bar: ylim manual
+  ✓  [A] Bar: color override
+  ✓  [A] Bar: bar_width=0.4
+  ✓  [A] Bar: show_stats + show_ns
+  ✓  [B] Bar: basic default
+  ✓  [B] Bar: error=sd
+  ✓  [B] Bar: error=ci95
+  ✓  [B] Bar: show_stats + parametric
+  ✓  [B] Bar: show_stats + nonparametric
+  ✓  [B] Bar: show_stats + paired (2-group)
+  ✓  [B] Bar: show_stats + permutation
+  ✓  [B] Bar: posthoc=Bonferroni
+  ✓  [B] Bar: posthoc=Sidak
+  ✓  [B] Bar: posthoc=Fisher LSD
+  ✓  [B] Bar: posthoc=Dunnett
+  ✓  [B] Bar: mc=Bonferroni
+  ✓  [B] Bar: mc=BH FDR
+  ✓  [B] Bar: mc=None
+  ✓  [B] Bar: show_p_values
+  ✓  [B] Bar: show_effect_size
+  ✓  [B] Bar: show_test_name
+  ✓  [B] Bar: gridlines=True
+  ✓  [B] Bar: horizontal=True
+  ✓  [B] Bar: yscale=log
+  ✓  [B] Bar: error_below_bar=True
+  ✓  [B] Bar: show_median=True
+  ✓  [B] Bar: open_points=True
+  ✓  [B] Bar: ref_line
+  ✓  [B] Bar: ylim manual
+  ✓  [B] Bar: color override
+  ✓  [B] Bar: bar_width=0.4
+  ✓  [B] Bar: show_stats + show_ns
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 3 — Line Graph
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] Line: basic default
+  ✓  [A] Line: error=sd
+  ✓  [A] Line: error=ci95
+  ✓  [A] Line: yscale=log
+  ✓  [A] Line: gridlines
+  ✓  [A] Line: show_points=False
+  ✓  [A] Line: marker_style=s
+  ✓  [A] Line: ref_line
+  ✓  [B] Line: basic default
+  ✓  [B] Line: error=sd
+  ✓  [B] Line: error=ci95
+  ✓  [B] Line: yscale=log
+  ✓  [B] Line: gridlines
+  ✓  [B] Line: show_points=False
+  ✓  [B] Line: marker_style=s
+  ✓  [B] Line: ref_line
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 4 — Grouped Bar
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] Grouped Bar: default
+  ✓  [A] Grouped Bar: show_stats=True
+  ✓  [A] Grouped Bar: show_anova_per_group
+  ✓  [A] Grouped Bar: yscale=log
+  ✓  [A] Grouped Bar: error=ci95
+  ✓  [B] Grouped Bar: default
+  ✓  [B] Grouped Bar: show_stats=True
+  ✓  [B] Grouped Bar: show_anova_per_group
+  ✓  [B] Grouped Bar: yscale=log
+  ✓  [B] Grouped Bar: error=ci95
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 5 — Box Plot
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] Box: default
+  ✓  [A] Box: show_stats parametric
+  ✓  [A] Box: show_stats nonparametric
+  ✓  [A] Box: show_stats paired
+  ✓  [A] Box: notch=True
+  ✓  [A] Box: gridlines
+  ✓  [A] Box: yscale=log
+  ✓  [A] Box: Dunnett
+  ✓  [B] Box: default
+  ✓  [B] Box: show_stats parametric
+  ✓  [B] Box: show_stats nonparametric
+  ✓  [B] Box: show_stats paired
+  ✓  [B] Box: notch=True
+  ✓  [B] Box: gridlines
+  ✓  [B] Box: yscale=log
+  ✓  [B] Box: Dunnett
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 6 — Scatter Plot
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] Scatter: default (regression+CI)
+  ✓  [A] Scatter: prediction_band
+  ✓  [A] Scatter: correlation_type=spearman
+  ✓  [A] Scatter: no regression
+  ✓  [A] Scatter: gridlines
+  ✓  [A] Scatter: log scales
+  ✓  [B] Scatter: default (regression+CI)
+  ✓  [B] Scatter: prediction_band
+  ✓  [B] Scatter: correlation_type=spearman
+  ✓  [B] Scatter: no regression
+  ✓  [B] Scatter: gridlines
+  ✓  [B] Scatter: log scales
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 7 — Violin Plot
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] Violin: default
+  ✓  [A] Violin: show_stats parametric Tukey
+  ✓  [A] Violin: show_stats nonparametric
+  ✓  [A] Violin: show_stats paired
+  ✓  [A] Violin: open_points
+  ✓  [A] Violin: Dunnett
+  ✓  [B] Violin: default
+  ✓  [B] Violin: show_stats parametric Tukey
+  ✓  [B] Violin: show_stats nonparametric
+  ✓  [B] Violin: show_stats paired
+  ✓  [B] Violin: open_points
+  ✓  [B] Violin: Dunnett
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 8 — Kaplan-Meier Survival
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] KM: default
+  ✓  [A] KM: show_ci=False
+  ✓  [A] KM: show_censors=False
+  ✓  [A] KM: show_stats=True
+  ✓  [A] KM: show_at_risk=True
+  ✓  [A] KM: show_p_values=True
+  ✓  [B] KM: default
+  ✓  [B] KM: show_ci=False
+  ✓  [B] KM: show_censors=False
+  ✓  [B] KM: show_stats=True
+  ✓  [B] KM: show_at_risk=True
+  ✓  [B] KM: show_p_values=True
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 9 — Heatmap
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] Heatmap: default
+  ✓  [A] Heatmap: annotate=True
+  ✓  [A] Heatmap: cluster_rows=True
+  ✓  [A] Heatmap: cluster_cols=True
+  ✓  [A] Heatmap: cluster rows+cols
+  ✓  [A] Heatmap: robust=True
+  ✓  [A] Heatmap: vmin/vmax
+  ✓  [A] Heatmap: custom colormap
+  ✓  [B] Heatmap: default
+  ✓  [B] Heatmap: annotate=True
+  ✓  [B] Heatmap: cluster_rows=True
+  ✓  [B] Heatmap: cluster_cols=True
+  ✓  [B] Heatmap: cluster rows+cols
+  ✓  [B] Heatmap: robust=True
+  ✓  [B] Heatmap: vmin/vmax
+  ✓  [B] Heatmap: custom colormap
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 10 — Two-Way ANOVA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] TwoWay: default
+  ✓  [A] TwoWay: show_stats=True
+  ✓  [A] TwoWay: show_posthoc=True
+  ✓  [A] TwoWay: show_effect_size
+  ✓  [A] TwoWay: error=sd
+  ✓  [A] TwoWay: error=ci95
+  ✓  [B] TwoWay: default
+  ✓  [B] TwoWay: show_stats=True
+  ✓  [B] TwoWay: show_posthoc=True
+  ✓  [B] TwoWay: show_effect_size
+  ✓  [B] TwoWay: error=sd
+  ✓  [B] TwoWay: error=ci95
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 11 — Before/After
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] Before/After: default
+  ✓  [A] Before/After: show_stats=True
+  ✓  [A] Before/After: show_p_values=True
+  ✓  [A] Before/After: gridlines
+  ✓  [A] Before/After: show_n_labels
+  ✓  [A] Before/After: yscale=log
+  ✓  [B] Before/After: default
+  ✓  [B] Before/After: show_stats=True
+  ✓  [B] Before/After: show_p_values=True
+  ✓  [B] Before/After: gridlines
+  ✓  [B] Before/After: show_n_labels
+  ✓  [B] Before/After: yscale=log
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 12 — Histogram
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] Histogram: auto bins
+  ✓  [A] Histogram: fixed bins=12
+  ✓  [A] Histogram: density=True
+  ✓  [A] Histogram: overlay_normal=True
+  ✓  [A] Histogram: density+normal
+  ✓  [B] Histogram: auto bins
+  ✓  [B] Histogram: fixed bins=12
+  ✓  [B] Histogram: density=True
+  ✓  [B] Histogram: overlay_normal=True
+  ✓  [B] Histogram: density+normal
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 13 — Subcolumn Scatter
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] Subcolumn: default
+  ✓  [A] Subcolumn: show_stats parametric
+  ✓  [A] Subcolumn: show_stats nonparametric
+  ✓  [A] Subcolumn: show_stats paired
+  ✓  [A] Subcolumn: Dunnett
+  ✓  [A] Subcolumn: error=sd open_points
+  ✓  [A] Subcolumn: yscale=log
+  ✓  [A] Subcolumn: gridlines
+  ✓  [A] Subcolumn: show_p_values
+  ✓  [B] Subcolumn: default
+  ✓  [B] Subcolumn: show_stats parametric
+  ✓  [B] Subcolumn: show_stats nonparametric
+  ✓  [B] Subcolumn: show_stats paired
+  ✓  [B] Subcolumn: Dunnett
+  ✓  [B] Subcolumn: error=sd open_points
+  ✓  [B] Subcolumn: yscale=log
+  ✓  [B] Subcolumn: gridlines
+  ✓  [B] Subcolumn: show_p_values
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 14 — Curve Fit (all 11 models)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] Curve Fit: 4PL Sigmoidal (EC50/IC50)
+  ✓  [A] Curve Fit: 4PL Sigmoidal (EC50/IC50) + show_residuals
+  ✓  [A] Curve Fit: 3PL Sigmoidal (no bottom)
+  ✓  [A] Curve Fit: 3PL Sigmoidal (no bottom) + show_residuals
+  ✓  [A] Curve Fit: One-phase exponential decay
+  ✓  [A] Curve Fit: One-phase exponential decay + show_residuals
+  ✓  [A] Curve Fit: One-phase exponential growth
+  ✓  [A] Curve Fit: One-phase exponential growth + show_residuals
+  ✓  [A] Curve Fit: Two-phase exponential decay
+  ✓  [A] Curve Fit: Two-phase exponential decay + show_residuals
+  ✓  [A] Curve Fit: Michaelis-Menten
+  ✓  [A] Curve Fit: Michaelis-Menten + show_residuals
+  ✓  [A] Curve Fit: Hill equation
+  ✓  [A] Curve Fit: Hill equation + show_residuals
+  ✓  [A] Curve Fit: Gaussian (bell curve)
+  ✓  [A] Curve Fit: Gaussian (bell curve) + show_residuals
+  ✓  [A] Curve Fit: Log-normal
+  ✓  [A] Curve Fit: Log-normal + show_residuals
+  ✓  [A] Curve Fit: Linear
+  ✓  [A] Curve Fit: Linear + show_residuals
+  ✓  [A] Curve Fit: Polynomial (2nd order)
+  ✓  [A] Curve Fit: Polynomial (2nd order) + show_residuals
+  ✓  [B] Curve Fit: 4PL Sigmoidal
+  ✓  [B] Curve Fit: One-phase exponential decay
+  ✓  [B] Curve Fit: Linear
+  ✓  [B] Curve Fit: gridlines + ci_band
+/home/codespace/.python/current/lib/python3.12/site-packages/scipy/stats/_axis_nan_policy.py:592: UserWarning: scipy.stats.shapiro: For N > 5000, computed p-value may not be accurate. Current N is 5001.
+  res = hypotest_fun_out(*samples, **kwds)
+/home/codespace/.python/current/lib/python3.12/site-packages/numpy/_core/fromnumeric.py:3824: RuntimeWarning: Mean of empty slice
+  return _methods._mean(a, axis=axis, dtype=dtype,
+/home/codespace/.python/current/lib/python3.12/site-packages/numpy/_core/_methods.py:142: RuntimeWarning: invalid value encountered in scalar divide
+  ret = ret.dtype.type(ret / rcount)
+/home/codespace/.python/current/lib/python3.12/site-packages/numpy/_core/fromnumeric.py:3824: RuntimeWarning: Mean of empty slice
+  return _methods._mean(a, axis=axis, dtype=dtype,
+/home/codespace/.python/current/lib/python3.12/site-packages/numpy/_core/_methods.py:142: RuntimeWarning: invalid value encountered in scalar divide
+  ret = ret.dtype.type(ret / rcount)
+/workspaces/Claude-Prism/plotter_functions.py:3891: RuntimeWarning: invalid value encountered in power
+  return Bottom + (Top - Bottom) / (1.0 + (EC50 / np.where(x == 0, 1e-12, x)) ** HillSlope)
+/workspaces/Claude-Prism/plotter_functions.py:4080: OptimizeWarning: Covariance of the parameters could not be estimated
+  _, pcov = curve_fit(fn, x_data, y_data, p0=popt, maxfev=100)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 15 — Column Statistics
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] ColStats: default (all flags on)
+  ✓  [A] ColStats: no normality
+  ✓  [A] ColStats: no CI
+  ✓  [A] ColStats: no CV
+  ✓  [A] ColStats: all flags off
+  ✓  [B] ColStats: default (all flags on)
+  ✓  [B] ColStats: no normality
+  ✓  [B] ColStats: no CI
+  ✓  [B] ColStats: no CV
+  ✓  [B] ColStats: all flags off
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 16 — Contingency
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] Contingency: 2×2 Fisher exact
+  ✓  [B] Contingency: 2×2 Fisher exact
+  ✓  [A] Contingency: 3×2 chi-square
+  ✓  [A] Contingency: show_percentages=True
+  ✓  [A] Contingency: show_expected=True
+  ✓  [A] Contingency: show_percentages=False
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 17 — Repeated Measures
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] RM: default
+  ✓  [A] RM: show_stats parametric
+  ✓  [A] RM: show_stats nonparametric
+  ✓  [A] RM: show_subject_lines=False
+  ✓  [A] RM: show_p_values
+  ✓  [A] RM: error=sd
+  ✓  [A] RM: error=ci95
+  ✓  [A] RM: yscale=log
+  ✓  [B] RM: default
+  ✓  [B] RM: show_stats parametric
+  ✓  [B] RM: show_stats nonparametric
+  ✓  [B] RM: show_subject_lines=False
+  ✓  [B] RM: show_p_values
+  ✓  [B] RM: error=sd
+  ✓  [B] RM: error=ci95
+  ✓  [B] RM: yscale=log
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 18 — Help Analyze Decision Tree
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  [A] Help Analyze: 2 groups (normal) → Parametric
+  ✓  [A] Help Analyze: 2 groups (non-normal) → Non-parametric
+  ✓  [A] Help Analyze: 3 normal groups → Parametric
+  ✓  [A] Help Analyze: paired 2-group → Paired
+  ✓  [B] Help Analyze: 4 normal groups → Parametric
+  ✓  [B] Help Analyze: 2 groups (normal) → Parametric
+  ✓  [B] Help Analyze: paired 2-group → Paired
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 19 — Edge Cases & Robustness
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  _apply_correction: empty list returns empty list
+  ✓  _apply_correction: single p-value handled for all methods
+  ✓  _p_to_stars boundary values correct
+  ✓  check_normality: n<3 returns None (not crash)
+  ✓  _run_stats: single group returns empty list (no error)
+  ✓  Bar chart with single group (no stats) renders without crash
+  ✓  Dunnett: control=None falls back gracefully
+  ✓  check_normality: n>5000 handled without crash
+  ✓  All 4 parametric posthoc options work with 3 groups
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P16 — Bracket style variants
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  P16 all bracket_style variants
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P17 — Horizontal stacked bar
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  P17 horizontal + percent stacked bar
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P18 — Custom x-tick labels
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  P18 xtick_labels on bar chart
+  ✓  P18 wrong-length xtick_labels falls back
+  ✓  P18 xtick_labels=None default
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P19 — Twin Y-axis and vertical reference line
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  P19 twin_y_series
+  ✓  P19 twin_y_series=[] no-op
+  ✓  P19 twin_y missing series no crash
+  ✓  P19 ref_vline on line chart
+  ✓  P19 ref_vline on scatter
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P20 — Export all charts PDF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  P20 export_all_charts_pdf valid PDF
+  ✓  P20 export_all_charts_pdf graceful failures
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  RESULTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  PASSED: 309
+  ✗  FAILED: 0
+  TOTAL:     309
+
+  ✓ all passed (309 passed, 309 total, 159.2s)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SUITE: p1p2p3  →  test_p1_p2_p3.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P1 — Axis Style
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  axis_style='open' on bar chart
+  ✓  axis_style='closed' on bar chart
+  ✓  axis_style='floating' on bar chart
+  ✓  axis_style='none' on bar chart
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P1 — Tick Direction
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  tick_dir='out' on bar chart
+  ✓  tick_dir='in' on bar chart
+  ✓  tick_dir='inout' on bar chart
+  ✓  tick_dir='' on bar chart
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P1 — Minor Ticks
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  minor_ticks=True on bar chart
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P1 — Point Size & Alpha
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  point_size=2.0, point_alpha=0.3 on bar chart
+  ✓  point_size=6.0, point_alpha=0.8 on bar chart
+  ✓  point_size=14.0, point_alpha=1.0 on bar chart
+  ✓  point_size/alpha on boxplot
+  ✓  point_size/alpha on violin
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P1 — Cap Size
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  cap_size=0.0 on bar chart
+  ✓  cap_size=4.0 on bar chart
+  ✓  cap_size=10.0 on bar chart
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P1 — Legend Position
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  legend_pos='best' on scatter
+  ✓  legend_pos='upper right' on scatter
+  ✓  legend_pos='upper left' on scatter
+  ✓  legend_pos='lower right' on scatter
+  ✓  legend_pos='outside' on scatter
+  ✓  legend_pos='none' on scatter
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P1 — _style_kwargs helper
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  _style_kwargs returns correct defaults for empty dict
+  ✓  _style_kwargs passes only style keys, ignores extras
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P1 — Styling propagates through all 16 existing chart types
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  style params on plotter_barplot
+  ✓  style params on plotter_boxplot
+  ✓  style params on plotter_violin
+  ✓  style params on plotter_scatterplot
+  ✓  style params on plotter_subcolumn_scatter
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P2a — One-sample t-test
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  one_sample t-test returns single result for 1 group
+  ✓  one_sample: mean far from mu0 is significant
+  ✓  one_sample: mean ≈ mu0 is ns
+  ✓  one_sample: 3 groups returns 3 results
+  ✓  one_sample: all MC corrections work
+  ✓  one_sample rendered on bar chart with show_stats=True
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P2b — Chi-Square GoF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  plotter_chi_square_gof: equal expected proportions
+  ✓  plotter_chi_square_gof: custom expected from Row 3
+  ✓  plotter_chi_square_gof: style params applied
+  ✓  plotter_chi_square_gof: χ² annotation appears on axes
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P2c — Full Regression Table
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  plotter_scatterplot: show_regression_table=True renders
+  ✓  plotter_scatterplot: regression table contains Slope annotation
+  ✓  plotter_scatterplot: show_regression_table=False suppresses table
+  ✓  _draw_regression_table: slope and R² present
+  ✓  _draw_regression_table: silently skips for n<3
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P3a — Stacked Bar Chart
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  plotter_stacked_bar: mode=absolute renders
+  ✓  plotter_stacked_bar: mode=percent renders
+  ✓  plotter_stacked_bar: legend present
+  ✓  plotter_stacked_bar: percent mode y-range is sensible
+  ✓  plotter_stacked_bar: style params applied
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P3b — Bubble Chart
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  plotter_bubble: default render
+  ✓  plotter_bubble: bubble_scale 0.2/1.0/3.0 renders
+  ✓  plotter_bubble: show_labels=True renders
+  ✓  plotter_bubble: style params applied
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P3c — Dot Plot
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  plotter_dot_plot: default render
+  ✓  plotter_dot_plot: show_mean + show_median
+  ✓  plotter_dot_plot: no mean/median overlay
+  ✓  plotter_dot_plot: open_points + custom point_size
+  ✓  plotter_dot_plot: axis_style=none + tick_dir=empty
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P3d — Bland-Altman Plot
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  plotter_bland_altman: default render
+  ✓  plotter_bland_altman: show_ci=False
+  ✓  plotter_bland_altman: Mean and SD annotations present
+  ✓  plotter_bland_altman: raises for <2 columns
+  ✓  plotter_bland_altman: style params applied
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  P3e — Forest Plot
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  plotter_forest_plot: default render
+  ✓  plotter_forest_plot: show_summary=False
+  ✓  plotter_forest_plot: ref_value=1.0 (OR reference)
+  ✓  plotter_forest_plot: show_weights=False
+  ✓  plotter_forest_plot: study labels appear on axes
+  ✓  plotter_forest_plot: summary diamond polygon present
+  ✓  plotter_forest_plot: style params applied
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Modularisation — _style_kwargs end-to-end
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  axis_style=closed: all 4 spines visible
+  ✓  axis_style=none: all spines hidden
+  ✓  axis_style=floating: left spine offset outward by 5
+  ✓  _apply_legend with 'none' removes existing legend
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Regression — original chart types accept new params without crashing
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  regression: barplot accepts all new style params
+  ✓  regression: boxplot accepts all new style params
+  ✓  regression: violin accepts all new style params
+  ✓  regression: subcolumn accepts all new style params
+  ✓  regression: before_after accepts all new style params
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  RESULTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  PASSED: 80
+  ✗  FAILED: 0
+  TOTAL:     80
+
+  ✓ all passed (80 passed, 80 total, 13.7s)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SUITE: control  →  test_control.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Bug 1 — Stale control name: warn + fallback, no crash
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  stale control: issues UserWarning instead of crashing
+  ✓  stale control: falls back to all-pairwise results
+  ✓  valid control: only control-vs-other pairs returned
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Bug 3 — Comparison mode pair filtering
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  all-pairwise: 3 groups → 3 pairs
+  ✓  vs-control: 3 groups → 2 pairs (no Drug A vs Drug B)
+  ✓  vs-control: Drug A vs Drug B excluded
+  ✓  vs-control: symmetric filter regardless of control position in group list
+  ✓  vs-control: parametric / nonparametric / permutation all filter correctly
+  ✓  control=None nonparametric: 4 groups → 6 pairs
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Bug 4 — Dunnett fallback behaviour
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  Dunnett control=None: uses first group, returns 2 results
+  ✓  Dunnett explicit control: 3 groups → 2 results all involving control
+  ✓  Dunnett: no double MC correction — p-values match scipy exactly
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ANOVA error term — all groups used even in vs-control mode
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  Tukey: Ctrl vs A p-value identical whether control filter is set or not
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  End-to-end render: show_stats + control on bar chart
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  bar chart show_stats + control='Vehicle': renders without crash
+  ✓  bar chart stale control in render: no crash, fallback to all-pairwise
+  ✓  all 4 parametric posthocs respect control filter
+  ✓  Dunnett + explicit control on bar chart: renders cleanly
+  ✓  nonparametric + control filter: renders without crash
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  p-to-stars correctness with control
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  _p_to_stars: all Prism threshold boundaries correct
+  ✓  Holm-Bonferroni correction: all corrected p ≥ raw p
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  RESULTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  PASSED: 20
+  ✗  FAILED: 0
+  TOTAL:     20
+
+  ✓ all passed (20 passed, 20 total, 1.8s)
+Traceback (most recent call last):
+  File "/workspaces/Claude-Prism/run_all.py", line 49, in run_suite
+    importlib.import_module(module_name)
+  File "/home/codespace/.python/current/lib/python3.12/importlib/__init__.py", line 90, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1387, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 994, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "/workspaces/Claude-Prism/tests/test_canvas_renderer.py", line 21, in <module>
+    from plotter_canvas_renderer import (
+ModuleNotFoundError: No module named 'plotter_canvas_renderer'
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SUITE: canvas_renderer  →  test_canvas_renderer.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ✗  Suite import/execution crashed:
+     No module named 'plotter_canvas_renderer'
+
+  ✓ all passed (0 passed, 0 total, 0.0s)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SUITE: modular  →  test_modular.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_widgets: module structure
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  _DS.PRIMARY is a hex colour string
+  ✓  _DS: all colour tokens are valid hex strings
+  ✓  LABELS dict has at least 20 entries
+  ✓  HINTS dict has at least 20 entries
+  ✓  label('title') returns 'Plot Title'
+  ✓  label(unknown) returns the key itself
+  ✓  hint('title') returns a non-empty string
+  ✓  hint(unknown) returns empty string
+  ✓  PAD constant is a positive integer
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_widgets: utility functions
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  _is_num: valid numeric strings and numbers
+  ✓  _is_num: non-numeric values return False
+  ✓  _non_numeric_values: detects bad cells
+  ✓  _non_numeric_values: empty list for all-numeric series
+  ✓  _non_numeric_values: respects max_shown cap
+  ✓  _scipy_summary: returns non-empty string for a real scipy function
+  ✓  _scipy_summary: respects max_chars bound
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_widgets: widget class attributes
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  PButton._is_pwidget is True
+  ✓  PEntry._is_pwidget is True
+  ✓  PCheckbox._BOX == 16
+  ✓  PRadioGroup._DOT == 14
+  ✓  All five P-widget classes are importable from plotter_widgets
+  ✓  _DS font constants are non-empty tuples
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_validators: flat-header
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  validate_bar: valid flat-header sheet has no errors
+  ✓  validate_bar: warns when fewer than 3 data rows
+  ✓  validate_bar: errors on non-numeric data cells
+  ✓  validate_bar: warns when a header cell is empty
+  ✓  validate_bar: errors when all header cells are empty
+  ✓  validate_flat_header: direct call returns no errors for valid data
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_validators: line chart
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  validate_line: valid line sheet has no errors
+  ✓  validate_line: errors on non-numeric X column
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_validators: grouped bar
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  validate_grouped_bar: valid 2-row-header sheet has no errors
+  ✓  validate_grouped_bar: handles 1 data row without crashing
+  ✓  validate_grouped_bar: errors when sheet has no data rows
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_validators: kaplan-meier
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  validate_kaplan_meier: valid KM sheet has no errors
+  ✓  validate_kaplan_meier: errors when fewer than 3 rows
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_validators: heatmap
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  validate_heatmap: valid heatmap sheet has no errors
+  ✓  validate_heatmap: errors on non-numeric cell
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_validators: miscellaneous
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  validate_two_way_anova: valid long-format sheet has no errors
+  ✓  validate_contingency: valid 2-group 2-outcome sheet has no errors
+  ✓  validate_chi_square_gof: valid sheet has no errors
+  ✓  validate_bland_altman: valid paired-measures sheet has no errors
+  ✓  validate_forest_plot: valid forest-plot sheet has no errors
+  ✓  All validators return (errors_list, warnings_list) for any input
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_results: module structure
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  prism_results exports populate_results callable
+  ✓  prism_results exports export_results_csv callable
+  ✓  prism_results exports copy_results_tsv callable
+  ✓  prism_results has a non-trivial module docstring
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_validators: module integrity
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  prism_validators has a non-trivial module docstring
+  ✓  All validate_* functions in prism_validators have docstrings
+  ✓  prism_validators exports at least 10 validate_* functions
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_widgets: module integrity
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  prism_widgets has a non-trivial module docstring
+  ✓  All P-widget classes and _DS have non-trivial docstrings
+  ✓  Utility functions in prism_widgets all have docstrings
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_tabs: TabState defaults
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  TabState: render_job_id, fig, canvas_widget start as None
+  ✓  TabState: constructor fields stored correctly
+  ✓  TabState: plot_frame reference is preserved
+  ✓  TabState: render_job_id can be mutated
+  ✓  TabState: fig field can be assigned
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_tabs: TabManager
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  TabManager.new_tab: creates TabState with correct fields
+  ✓  TabManager.active: points to the newly created tab
+  ✓  TabManager.get_tab: returns correct tab or None
+  ✓  TabManager: two tabs; active is the most recent
+  ✓  TabManager.update_label: updates TabState.label
+  ✓  TabManager.reorder: moves tab from index 0 to 2
+  ✓  TabManager.reorder: same-index reorder is a no-op
+  ✓  TabManager.all_tabs: returns a copy (not a live reference)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_tabs: TabBar
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  TabBar: constructs as tk.Canvas without error
+  ✓  TabBar.set_tabs: empty list does not raise
+  ✓  TabBar.set_active: stores the active tab_id
+  ✓  TabBar.update_label: mutates the TabState label
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_tabs: draw_tab_icon
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  draw_tab_icon: all known chart types draw without error
+  ✓  draw_tab_icon: creates at least one canvas item
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  prism_tabs: module integrity
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  prism_tabs has a non-trivial module docstring
+  ✓  prism_tabs exports TabState, TabManager, TabBar, draw_tab_icon
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  RESULTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  PASSED: 74
+  ✗  FAILED: 0
+  TOTAL:     74
+
+  ✓ all passed (74 passed, 74 total, 0.2s)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SUITE: stats_verify  →  test_stats_verification.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Welch's t-test — p-value matches scipy reference
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  Welch t-test: p matches scipy.stats.ttest_ind (equal_var=False)
+  ✓  Welch t-test: clearly separated groups flagged significant
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Cohen's d — analytical formula verification
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  Cohen's d: hand-computed value -4.8
+  ✓  Cohen's d: antisymmetric d(A,B) = -d(B,A)
+  ✓  Cohen's d: d=0 for groups with identical values
+  ✓  Cohen's d: NaN for n<2
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Hedges' g — small-sample bias correction
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  Hedges' g: g = d × J(m) with m=8
+  ✓  Hedges' g: |g| < |d| for small samples (n=5)
+  ✓  Hedges' g: converges to Cohen's d for large n
+  ✓  Hedges' g: NaN when n<2
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Rank-biserial r — Mann-Whitney effect size
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  Rank-biserial r: -1 for complete separation (A < B)
+  ✓  Rank-biserial r: +1 when A > B completely
+  ✓  Rank-biserial r: antisymmetric r(A,B)=-r(B,A)
+  ✓  Rank-biserial r: always in [-1, 1]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Mann-Whitney U — p-value vs scipy exact
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  Mann-Whitney: p matches scipy.stats.mannwhitneyu
+  ✓  Mann-Whitney: significant for fully separated groups (n=8)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  One-way ANOVA — F-statistic and p-value
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  One-way ANOVA: F=8.0 for hand-computed balanced design
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Tukey HSD — correct pair significance
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  Tukey HSD: A vs C significant, A vs B and B vs C NS
+  ✓  Tukey HSD: A vs C p-value matches manual studentized_range.cdf
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Multiple comparison corrections — Bonferroni, Holm, BH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  Bonferroni: p_corr = min(p * m, 1)
+  ✓  Holm-Bonferroni: corrected p-values are non-decreasing
+  ✓  Holm-Bonferroni: all corrected ≥ raw
+  ✓  BH FDR: corrected p-values non-decreasing (sorted input)
+  ✓  All corrections: corrected p capped at 1.0
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  p-to-stars — exact Prism threshold boundaries
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  p-to-stars: correct stars at each Prism boundary
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Chi-square GoF — analytical χ² and p-value
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  Chi-square GoF: χ²=14.0 for [20,30,50] vs uniform
+  ✓  Chi-square GoF: χ²=0 and p=1 for perfectly uniform observations
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Log-rank test — hand-computed Mantel-Cox statistic
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  Log-rank: χ²≈5.052 and p<0.05 for non-overlapping groups
+  ✓  Log-rank: p≈1 for identical survival curves
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Two-way ANOVA — partial eta-squared (ηp²)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  Two-way ANOVA: ηp² in [0,1] for each effect
+  ✓  Two-way ANOVA: ηp² = SS_effect/(SS_effect+SS_error)
+  ✓  Two-way ANOVA: strong main effects → significant F and large ηp²
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Two-way post-hoc — Welch's t-test (equal_var=False)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  Two-way post-hoc: p_raw matches Welch's ttest_ind(equal_var=False)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  One-sample t-test — p-value vs scipy
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  One-sample t-test: p matches scipy.stats.ttest_1samp
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Paired t-test — p-value vs scipy
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  Paired t-test: p matches scipy.stats.ttest_rel
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Dunn's post-hoc — p-value vs scipy normal CDF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  Dunn's post-hoc: most-extreme pair significant for large separation (n=10)
+  ✓  Dunn's post-hoc: p-values in [0,1]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  RESULTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓  PASSED: 37
+  ✗  FAILED: 0
+  TOTAL:     37
+
+  ✓ all passed (37 passed, 37 total, 0.2s)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  AGGREGATED RESULTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Suites:    6
+  ✓ PASSED:  520
+  ✗ FAILED:  0
+  TOTAL:     520
+  Wall time: 175.2s

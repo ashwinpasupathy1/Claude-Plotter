@@ -1,0 +1,25 @@
+# Phase 2 Known Issues
+
+## Non-blocking (documented, not fixed)
+
+### 1. Duplicate private helpers across modules
+  - `_pd()`: plotter_barplot_app.py:22 and plotter_validators.py:44 — isolation pattern
+  - `_is_num()`: plotter_widgets.py:906 and plotter_validators.py:55 — isolation pattern
+  - `_non_numeric_values()`: plotter_widgets.py:915 and plotter_validators.py:64 — isolation pattern
+  - `_scipy_summary()`: plotter_barplot_app.py:352 and plotter_widgets.py:930
+    → barplot_app imports it from plotter_widgets (line 47) but also redefines it.
+      Local definition shadows the import. Future refactor: remove from barplot_app.
+
+### 2. TabBar/TabManager tests require Tk display (headless CI)
+Mitigated in Agent G: tests skip gracefully when no display is available.
+With xvfb-run, all 19 tests execute and verify real behavior.
+
+### 3. Phase 1 known issues still open
+  - Canvas mode toggle only re-triggers for "bar", not "grouped_bar"
+  - ttk.Treeview heading colours not customisable on macOS Aqua theme
+  - _populate_results for grouped charts merges header rows incorrectly
+  - prism_ prefix remains in comments/docstrings (cosmetic only)
+
+## Fixed in Agent G verification
+  - pingouin 0.6.0 p_unc column rename: already fixed by Agent F, verified OK
+  - 19 headless Tk test failures: fixed in test_modular.py Section 13

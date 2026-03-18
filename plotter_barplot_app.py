@@ -69,6 +69,13 @@ except ImportError as _e:
     print(f"[prism] warning: prism_results not found ({_e})")
     _RESULTS_AVAILABLE = False
 
+try:
+    from plotter_app_icons import ICON_FN
+    _ICON_FN = ICON_FN  # backward-compat alias; local icon functions removed
+except ImportError as _e:
+    print(f"[prism] warning: plotter_app_icons not found ({_e})")
+    _ICON_FN = {}
+
 # Heavy scientific imports are deferred to first use so the window
 # appears immediately. They are loaded on a background thread via
 # _import_functions() and also imported lazily inside each method
@@ -155,105 +162,12 @@ def load_tk_icon():
         return None
 
 
-def section_sep(parent, row, text):
-    """Styled section band header  -  filled blue-tinted strip with left accent bar."""
-    outer = tk.Frame(parent, bg="#edf2f8")
-    outer.grid(row=row, column=0, columnspan=3, sticky="ew", padx=0, pady=(14, 2))
-    tk.Frame(outer, bg="#2274A5", width=3).pack(side="left", fill="y", padx=(0, 9))
-    tk.Label(outer, text=text.upper(), bg="#edf2f8", fg="#2274A5",
-             font=("Helvetica Neue", 9, "bold"), anchor="w").pack(side="left", pady=5)
-
-
 def _lbl(parent, row, key, font_size=13):
     """Create a bold section label with tooltip, grid it, return (label, next_row)."""
     l = ttk.Label(parent, text=label(key), font=("Helvetica Neue", font_size, "bold"))
     l.grid(row=row, column=0, sticky="w", padx=PAD, pady=(4, 2))
     tip(l, key)
     return l, row + 1
-
-
-LABELS = {
-    "excel_path": "Excel File", "sheet": "Sheet",
-    "error": "Error Bars", "show_points": "Show Data Points",
-    "jitter_amount": "Jitter Amount", "color": "Color Palette",
-    "title": "Plot Title", "xlabel": "X-axis Label", "ytitle": "Y-axis Label",
-    "yscale": "Y Scale", "ylim": "Y Limits", "figsize": "Figure Size",
-    "font_size": "Font Size", "bar_width": "Bar Width",
-    "line_width": "Line Width", "marker_style": "Marker Style",
-    "marker_size": "Marker Size", "show_stats": "Show Significance Brackets",
-    "stats_test": "Statistical Test", "n_permutations": "Number of Permutations",
-    "mc_correction": "Multiple Comparison Correction",
-    "posthoc": "Post-hoc Test",
-    "control": "Control Group",
-}
-HINTS = {
-    "excel_path": "Path to your Excel file (.xlsx or .xls)",
-    "sheet": "Sheet name or index (0 = first sheet)",
-    "error": "Error bar style for the plot",
-    "show_points": "Overlay individual data points as a strip plot",
-    "jitter_amount": "Horizontal spread of data points (0 = no jitter)",
-    "color": "Seaborn palette name, single color, or blank for default Prism colors",
-    "title": "Main title displayed above the plot",
-    "xlabel": "Label for the X axis",
-    "ytitle": "Label for the Y axis",
-    "yscale": "Linear or log scale for the Y axis",
-    "ylim": "Fix Y-axis range (leave as None for automatic)",
-    "figsize": "Figure width x height in inches",
-    "font_size": "Base font size for tick labels and axis titles",
-    "bar_width": "Width of each bar (0.1 = thin, 1.0 = touching)",
-    "line_width": "Thickness of connecting lines",
-    "marker_style": "Shape of the data markers",
-    "marker_size": "Size of the data markers",
-    "show_stats": "Draw significance brackets and p-value annotations",
-    "stats_test": "Statistical test used to compute p-values",
-    "n_permutations": "Number of permutations for the permutation test",
-    "mc_correction": "Method used to correct p-values for multiple comparisons",
-    "posthoc": "Post-hoc pairwise test (for 3+ groups, parametric only)",
-    "control": "Reference group for pairwise comparisons (blank = all pairs)",
-}
-
-def label(key): return LABELS.get(key, key)
-def hint(key):  return HINTS.get(key, "")
-
-def tip(widget, key):
-    text = hint(key)
-    if not text:
-        return
-    tt = None
-    def _show(e):
-        nonlocal tt
-        tt = tk.Toplevel(widget)
-        tt.wm_overrideredirect(True)
-        tt.wm_geometry(f"+{e.x_root+12}+{e.y_root+4}")
-        ttk.Label(tt, text=text, background="#fffbe6", relief="solid",
-                  borderwidth=1, font=("Helvetica Neue", 11),
-                  wraplength=320).pack(padx=4, pady=2)
-    def _hide(e):
-        nonlocal tt
-        if tt:
-            tt.destroy(); tt = None
-    widget.bind("<Enter>", _show)
-    widget.bind("<Leave>", _hide)
-
-
-def _create_tooltip(widget, text):
-    """Attach a plain-text hover tooltip to *widget* (no hint-key lookup)."""
-    tt = None
-    def _show(e):
-        nonlocal tt
-        tt = tk.Toplevel(widget)
-        tt.wm_overrideredirect(True)
-        tt.wm_geometry(f"+{e.x_root+12}+{e.y_root+4}")
-        ttk.Label(tt, text=text, background="#fffbe6", relief="solid",
-                  borderwidth=1, font=("Helvetica Neue", 11),
-                  wraplength=320).pack(padx=4, pady=2)
-    def _hide(e):
-        nonlocal tt
-        if tt:
-            tt.destroy(); tt = None
-    widget.bind("<Enter>", _show)
-    widget.bind("<Leave>", _hide)
-
 
 
 # ---------------------------------------------------------------------------
@@ -368,117 +282,6 @@ _VAR_DEFAULTS: dict = {
 }
 
 
-def add_placeholder(entry, var, text):
-    """Show gray placeholder text when the entry/combobox is empty and unfocused.
-
-    Behavior rules (aligned with user expectations):
-      • On creation: if var is empty, show gray placeholder text.
-      • On focus-in:  immediately clear placeholder so user can type.
-      • On focus-out: if the user left the field empty, restore placeholder.
-      • Programmatic reset (e.g. chart-type switch): restores placeholder
-        because var is set to "" by _reset_vars_to_defaults.
-      • "Empty is valid": once the user has focused the field and deliberately
-        cleared it (focus-out with empty var), that IS a valid empty state.
-        We still show the placeholder visually (gray hint) but var stays "".
-      • Generate Plot respects var value: if var=="" the label param will be
-        "" (no label), which is correct Prism behavior.
-
-    The visual placeholder is NEVER inserted into var  -  it is display-only.
-    This prevents the placeholder text from leaking into plot labels.
-    """
-    PLACEHOLDER_COLOR = "#aaaaaa"
-    DEFAULT_COLOR     = "#000000"
-    is_combo = isinstance(entry, (ttk.Combobox, PCombobox))
-
-    # Track whether the widget is currently showing the visual placeholder
-    _showing = [False]
-
-    def _show_ph():
-        """Show the gray hint text visually without touching var."""
-        try:
-            entry.config(foreground=PLACEHOLDER_COLOR)
-            if not is_combo:
-                entry.delete(0, "end")
-                entry.insert(0, text)
-            else:
-                entry.set(text)
-            _showing[0] = True
-        except Exception:
-            pass
-
-    def _hide_ph(clear_visual=True):
-        """Remove the gray hint, restore black text."""
-        if not _showing[0]:
-            return
-        entry.config(foreground=DEFAULT_COLOR)
-        if clear_visual:
-            if not is_combo:
-                entry.delete(0, "end")
-            else:
-                entry.set("")
-        _showing[0] = False
-
-    def _on_focus_in(e):
-        if _showing[0]:
-            _hide_ph()
-
-    def _on_focus_out(e):
-        # Only restore placeholder if var is truly empty
-        if not var.get().strip():
-            _show_ph()
-        else:
-            entry.config(foreground=DEFAULT_COLOR)
-            _showing[0] = False
-
-    def _on_key(e):
-        """When user starts typing over placeholder, clear it first."""
-        if _showing[0]:
-            _hide_ph()
-
-    def _on_var_change(*_):
-        val = var.get()
-        try:
-            focused = (str(entry.focus_get()) == str(entry))
-        except Exception:
-            focused = False
-        if val and val != text:
-            # Real content written programmatically (e.g. loading saved state)
-            entry.config(foreground=DEFAULT_COLOR)
-            _showing[0] = False
-        elif not val and not focused:
-            # Var cleared programmatically (chart-type reset)  -  restore placeholder
-            _show_ph()
-
-    entry.bind("<FocusIn>",  _on_focus_in)
-    entry.bind("<FocusOut>", _on_focus_out)
-    entry.bind("<Key>",      _on_key, add=True)
-    var.trace_add("write", _on_var_change)
-    # Initialise: show placeholder if var starts empty
-    if not var.get():
-        _show_ph()
-
-
-def _bind_scroll_recursive(widget, handler, button4_handler=None, button5_handler=None):
-    """Bind mousewheel scroll to *widget* and all its descendants.
-
-    This is the safe alternative to dlg.bind_all() in popup windows:
-    bind_all on a Toplevel captures events from the parent window too (macOS),
-    causing scroll conflicts when a popup is open.  By binding only to the
-    popup's own widget tree we limit the handler's scope to that window.
-
-    Also handles Linux Button-4/5 scroll events.
-    """
-    try:
-        widget.bind("<MouseWheel>", handler, add=True)
-        if button4_handler:
-            widget.bind("<Button-4>", button4_handler, add=True)
-            widget.bind("<Button-5>", button5_handler or button4_handler, add=True)
-        for child in widget.winfo_children():
-            _bind_scroll_recursive(child, handler, button4_handler, button5_handler)
-    except Exception:
-        pass
-
-
 PREFS_PATH = os.path.expanduser("~/Library/Preferences/claude_plotter.json")
 
 def _load_prefs():
@@ -540,277 +343,6 @@ def _cached_df(path, sheet):
         raise
 
 
-# ---------------------------------------------------------------------------
-# Vector chart-type icons  -  drawn onto a tk.Canvas (28×28 px)
-# Each function receives (canvas, fg, bg) and draws a chart-appropriate icon.
-# ---------------------------------------------------------------------------
-
-def _icon_bar(c, fg, bg):
-    """Vertical bar chart icon."""
-    c.create_rectangle(4, 18, 9,  26, fill=fg, outline="")
-    c.create_rectangle(11, 10, 16, 26, fill=fg, outline="")
-    c.create_rectangle(18, 14, 23, 26, fill=fg, outline="")
-    c.create_line(2, 26, 26, 26, fill=fg, width=1)
-
-def _icon_line(c, fg, bg):
-    """Line graph icon."""
-    pts = [3,22, 8,14, 13,17, 18,8, 24,10]
-    c.create_line(*pts, fill=fg, width=2, smooth=False)
-    for x, y in zip(pts[0::2], pts[1::2]):
-        c.create_oval(x-2, y-2, x+2, y+2, fill=fg, outline="")
-    c.create_line(2, 24, 2, 4,  fill=fg, width=1)
-    c.create_line(2, 24, 26, 24, fill=fg, width=1)
-
-def _icon_grouped_bar(c, fg, bg):
-    """Grouped bar chart icon  -  two colors per cluster."""
-    hi = "#aaaaaa" if fg == "#2274A5" else "#888888"
-    pairs = [(3,9), (11,17), (19,25)]
-    heights = [(22,16), (18,12), (20,10)]
-    for (x1, x2), (h1, h2) in zip(pairs, heights):
-        c.create_rectangle(x1, h1, x1+3, 26, fill=fg, outline="")
-        c.create_rectangle(x1+4, h2, x1+7, 26, fill=hi, outline="")
-    c.create_line(2, 26, 26, 26, fill=fg, width=1)
-
-def _icon_box(c, fg, bg):
-    """Box-and-whisker icon."""
-    # whisker lines
-    c.create_line(14, 4,  14, 9,  fill=fg, width=1)
-    c.create_line(14, 21, 14, 26, fill=fg, width=1)
-    # box
-    c.create_rectangle(7, 9, 21, 21, outline=fg, fill="", width=1)
-    # median
-    c.create_line(7, 15, 21, 15, fill=fg, width=2)
-    # caps
-    c.create_line(11, 4,  17, 4,  fill=fg, width=1)
-    c.create_line(11, 26, 17, 26, fill=fg, width=1)
-
-def _icon_scatter(c, fg, bg):
-    """Scatter plot icon."""
-    pts = [(5,22),(9,18),(12,13),(15,17),(19,8),(22,11),(6,10),(10,24),(20,20)]
-    for x, y in pts:
-        c.create_oval(x-2, y-2, x+2, y+2, fill=fg, outline="")
-    c.create_line(2, 24, 2, 4,  fill=fg, width=1)
-    c.create_line(2, 24, 26, 24, fill=fg, width=1)
-
-def _icon_violin(c, fg, bg):
-    """Violin plot icon  -  a mirrored curve shape."""
-    # Draw a simple symmetric violin outline
-    pts_r = [14,4, 18,8, 19,14, 17,20, 14,24]
-    pts_l = [14,4, 10,8,  9,14, 11,20, 14,24]
-    c.create_line(*pts_r, smooth=True, fill=fg, width=2)
-    c.create_line(*pts_l, smooth=True, fill=fg, width=2)
-    # median dot
-    c.create_line(10, 14, 18, 14, fill=fg, width=2)
-
-def _icon_survival(c, fg, bg):
-    """Kaplan-Meier step-down survival curve."""
-    pts = [3,6, 3,14, 9,14, 9,19, 15,19, 15,23, 26,23]
-    c.create_line(*pts, fill=fg, width=2)
-    c.create_line(2, 24, 2, 4,  fill=fg, width=1)
-    c.create_line(2, 24, 26, 24, fill=fg, width=1)
-
-def _icon_heatmap(c, fg, bg):
-    """Heatmap grid icon  -  3×3 cells with gradient fill."""
-    shades = [
-        ["#d0e8fa","#7ab8e0","#2274A5"],
-        ["#7ab8e0","#2274A5","#1a5580"],
-        ["#2274A5","#1a5580","#0d2a40"],
-    ]
-    if fg != "#2274A5":
-        shades = [
-            ["#dddddd","#aaaaaa","#777777"],
-            ["#aaaaaa","#777777","#444444"],
-            ["#777777","#444444","#111111"],
-        ]
-    for row in range(3):
-        for col in range(3):
-            x1 = 3 + col*8;  y1 = 3 + row*8
-            c.create_rectangle(x1, y1, x1+7, y1+7,
-                                fill=shades[row][col], outline=bg, width=1)
-
-def _icon_two_way(c, fg, bg):
-    """Two-way ANOVA grouped bars  -  two groups of two bars."""
-    hi = "#aaaaaa" if fg == "#2274A5" else "#888888"
-    data = [(3,20,fg),(7,14,hi),(13,16,fg),(17,10,hi)]
-    for x, h, col in data:
-        c.create_rectangle(x, h, x+3, 26, fill=col, outline="")
-    c.create_line(2, 26, 26, 26, fill=fg, width=1)
-
-def _icon_before_after(c, fg, bg):
-    """Before/after paired dot plot with connecting lines."""
-    pairs = [(7,20,7,8),(14,18,14,12),(21,22,21,6)]
-    for x, y1, x2, y2 in pairs:
-        c.create_line(x, y1, x2, y2, fill="#aaaaaa", width=1)
-        c.create_oval(x-3, y1-3, x+3, y1+3, fill=fg, outline="")
-        c.create_oval(x2-3, y2-3, x2+3, y2+3, fill=fg, outline="")
-    c.create_line(2, 26, 2, 4,  fill=fg, width=1)
-
-def _icon_histogram(c, fg, bg):
-    """Histogram icon."""
-    heights = [22, 15, 9, 13, 20, 25]
-    w = 4
-    for i, h in enumerate(heights):
-        x = 1 + i*(w+0)
-        c.create_rectangle(x, h, x+w-1, 26, fill=fg, outline=bg, width=1)
-    c.create_line(1, 26, 26, 26, fill=fg, width=1)
-
-def _icon_subcolumn(c, fg, bg):
-    """Subcolumn scatter  -  dots with mean line, no bar fill."""
-    groups = [(6, [8,13,19,22]), (14, [6,11,16,21]), (22, [9,14,17,24])]
-    for x, ys in groups:
-        for y in ys:
-            c.create_oval(x-2, y-2, x+2, y+2, fill=fg, outline="")
-        mean_y = sum(ys)//len(ys)
-        c.create_line(x-4, mean_y, x+4, mean_y, fill=fg, width=2)
-    c.create_line(2, 26, 26, 26, fill=fg, width=1)
-
-def _icon_curve_fit(c, fg, bg):
-    """Sigmoid / curve fit icon."""
-    # Draw a smooth S-curve approximation
-    pts = [3,23, 6,22, 9,20, 12,15, 15,9, 18,6, 21,5, 24,5]
-    c.create_line(*pts, smooth=True, fill=fg, width=2)
-    # A few data dots near the curve
-    for x, y in [(4,22),(8,20),(13,14),(18,7),(23,5)]:
-        c.create_oval(x-2, y-2, x+2, y+2, fill=fg, outline="")
-    c.create_line(2, 24, 2, 4,  fill=fg, width=1)
-    c.create_line(2, 24, 26, 24, fill=fg, width=1)
-
-def _icon_col_stats(c, fg, bg):
-    """Column statistics  -  simple table grid."""
-    # Header row
-    c.create_rectangle(3, 4, 25, 10, fill=fg, outline="")
-    # Data rows
-    for row in range(3):
-        y = 12 + row*5
-        c.create_rectangle(3, y, 25, y+4, fill="", outline=fg, width=1)
-        # Divider between col label and value
-        c.create_line(10, y, 10, y+4, fill=fg, width=1)
-
-def _icon_contingency(c, fg, bg):
-    """Contingency / grouped count bars."""
-    hi = "#aaaaaa" if fg == "#2274A5" else "#888888"
-    c.create_rectangle(3, 14, 9, 26,  fill=fg, outline="")
-    c.create_rectangle(10, 8, 16, 26, fill=hi, outline="")
-    c.create_rectangle(17, 17, 23, 26, fill=fg, outline="")
-    c.create_line(2, 26, 26, 26, fill=fg, width=1)
-
-def _icon_repeated(c, fg, bg):
-    """Repeated measures  -  dots connected across timepoints."""
-    timepoints = [5, 13, 21]
-    subjects = [(22, 18, 12), (19, 14, 8), (24, 21, 15)]
-    for ys in subjects:
-        prev_x, prev_y = None, None
-        for x, y in zip(timepoints, ys):
-            if prev_x is not None:
-                c.create_line(prev_x, prev_y, x, y, fill="#aaaaaa", width=1)
-            c.create_oval(x-2, y-2, x+2, y+2, fill=fg, outline="")
-            prev_x, prev_y = x, y
-    c.create_line(2, 26, 26, 26, fill=fg, width=1)
-
-def _icon_chi_square_gof(c, fg, bg):
-    """Chi-square GoF  -  solid observed bars with dashed expected line overlay."""
-    bars = [(3, 20), (10, 12), (17, 16)]
-    for x, h in bars:
-        c.create_rectangle(x, 26 - h, x + 6, 26, fill=fg, outline="")
-    # Dashed expected line across all bars
-    exp_y = 26 - 15
-    for x in range(3, 24, 3):
-        c.create_line(x, exp_y, x + 2, exp_y, fill=fg, width=1, dash=(2, 2))
-    c.create_line(2, 26, 26, 26, fill=fg, width=1)
-
-
-def _icon_stacked_bar(c, fg, bg):
-    """Stacked bar  -  three bars each with two stacked segments."""
-    segs = [(4, [8, 7]), (11, [12, 6]), (18, [6, 9])]
-    shades = [fg, "#aaaaaa"]
-    for x, heights in segs:
-        bottom = 26
-        for h, shade in zip(heights, shades):
-            c.create_rectangle(x, bottom - h, x + 6, bottom, fill=shade, outline="")
-            bottom -= h
-    c.create_line(2, 26, 26, 26, fill=fg, width=1)
-
-def _icon_bubble(c, fg, bg):
-    """Bubble chart  -  circles of varying size."""
-    bubbles = [(7, 19, 5), (16, 12, 7), (22, 20, 3), (11, 8, 4)]
-    for x, y, r in bubbles:
-        c.create_oval(x - r, y - r, x + r, y + r, fill=fg, outline="")
-    c.create_line(2, 26, 2, 4,  fill=fg, width=1)
-    c.create_line(2, 26, 26, 26, fill=fg, width=1)
-
-def _icon_dot_plot(c, fg, bg):
-    """Dot plot (strip)  -  jittered dots with mean line per group."""
-    groups = [(6, [8, 14, 11, 18, 10]), (16, [12, 7, 15, 9, 6])]
-    for gx, ys in groups:
-        for i, y in enumerate(ys):
-            jit = [-2, 1, -1, 2, 0][i % 5]
-            c.create_oval(gx + jit - 2, 26 - y - 2, gx + jit + 2, 26 - y + 2,
-                          fill=fg, outline="")
-        mean_y = int(sum(ys) / len(ys))
-        c.create_line(gx - 4, 26 - mean_y, gx + 4, 26 - mean_y, fill=fg, width=2)
-    c.create_line(2, 26, 26, 26, fill=fg, width=1)
-
-def _icon_bland_altman(c, fg, bg):
-    """Bland-Altman  -  scatter with mean diff and LoA lines."""
-    pts = [(5, 14), (9, 13), (13, 15), (17, 12), (21, 14)]
-    for x, y in pts:
-        c.create_oval(x - 2, y - 2, x + 2, y + 2, fill=fg, outline="")
-    c.create_line(3, 13, 25, 13, fill=fg, width=1)
-    for y in (8, 18):
-        for x in range(3, 25, 4):
-            c.create_line(x, y, x + 2, y, fill=fg, width=1)
-    c.create_line(2, 26, 2, 4,  fill=fg, width=1)
-    c.create_line(2, 26, 26, 26, fill=fg, width=1)
-
-def _icon_forest_plot(c, fg, bg):
-    """Forest plot  -  horizontal CI lines with effect squares and summary diamond."""
-    studies = [(14, 9), (17, 14), (11, 19)]
-    for eff_x, y in studies:
-        lo, hi = eff_x - 5, eff_x + 5
-        c.create_line(lo, y, hi, y, fill=fg, width=1)
-        c.create_rectangle(eff_x - 2, y - 2, eff_x + 2, y + 2, fill=fg, outline="")
-    c.create_polygon(8, 24, 14, 22, 20, 24, 14, 26, fill=fg, outline="")
-    c.create_line(14, 4, 14, 27, fill=fg, width=1, dash=(2, 2))
-
-def _icon_wiki(c, fg, bg):
-    """Wiki / reference  -  open book icon."""
-    # Book spine
-    c.create_line(14, 5, 14, 25, fill=fg, width=2)
-    # Left page
-    c.create_polygon(4, 7, 13, 5, 13, 24, 4, 23, fill="", outline=fg, width=1)
-    # Right page
-    c.create_polygon(15, 5, 24, 7, 24, 23, 15, 24, fill="", outline=fg, width=1)
-    # Lines on pages
-    for y in [11, 15, 19]:
-        c.create_line(6, y, 12, y-1, fill=fg, width=1)
-        c.create_line(16, y-1, 22, y, fill=fg, width=1)
-
-# Map chart key -> icon draw function
-_ICON_FN = {
-    "bar":               _icon_bar,
-    "line":              _icon_line,
-    "grouped_bar":       _icon_grouped_bar,
-    "box":               _icon_box,
-    "scatter":           _icon_scatter,
-    "violin":            _icon_violin,
-    "kaplan_meier":      _icon_survival,
-    "heatmap":           _icon_heatmap,
-    "two_way_anova":     _icon_two_way,
-    "before_after":      _icon_before_after,
-    "histogram":         _icon_histogram,
-    "subcolumn_scatter": _icon_subcolumn,
-    "curve_fit":         _icon_curve_fit,
-    "column_stats":      _icon_col_stats,
-    "contingency":       _icon_contingency,
-    "repeated_measures": _icon_repeated,
-    "chi_square_gof":    _icon_chi_square_gof,
-    "stacked_bar":       _icon_stacked_bar,
-    "bubble":            _icon_bubble,
-    "dot_plot":          _icon_dot_plot,
-    "bland_altman":      _icon_bland_altman,
-    "forest_plot":       _icon_forest_plot,
-    "wiki":              _icon_wiki,
-}
 
 _SB_ITEM_H    = 56   # height of each sidebar item in pixels
 _SB_ICON_SIZE = 28   # icon canvas size
@@ -836,583 +368,7 @@ def _scipy_summary(fn, max_chars: int = 280) -> str:
     return " ".join(result)
 
 
-def _is_num(v) -> bool:
-    """Return True if v can be cast to float."""
-    try:
-        float(v)
-        return True
-    except (ValueError, TypeError):
-        return False
-
-
-def _non_numeric_values(series, max_shown: int = 5) -> list[str]:
-    """Return a list of non-numeric string representations from a pandas Series.
-    Used by validators to report bad cells concisely."""
-    return [str(v) for v in series.dropna() if not _is_num(v)][:max_shown]
-
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Design System
-# All visual constants live here. To retheme the app, edit this block only.
-# ══════════════════════════════════════════════════════════════════════════════
-
-class _DS:
-    """Design-system tokens shared by all custom widgets."""
-    PRIMARY     = "#2274A5"   # accent blue
-    PRIMARY_HV  = "#1b5d87"   # hover
-    PRIMARY_PR  = "#155078"   # pressed
-    PRIMARY_FG  = "#ffffff"   # text on primary
-    SEC_BG      = "#ffffff"   # secondary button bg
-    SEC_FG      = "#2274A5"   # secondary text/border
-    SEC_HV      = "#edf2f8"   # secondary hover
-    GHOST_BG    = "#f0f0f0"   # ghost bg (matches sidebar)
-    GHOST_FG    = "#555555"
-    GHOST_HV    = "#e2e8ef"
-    DIS_BG      = "#e8e8e8"   # disabled bg
-    DIS_FG      = "#aaaaaa"   # disabled text
-    DIS_BORDER  = "#d0d0d0"
-    ENTRY_BG    = "#ffffff"
-    ENTRY_BDR   = "#cccccc"
-    ENTRY_FOC   = "#2274A5"
-    TEXT        = "#333333"
-    FONT        = ("Helvetica Neue", 12)
-    FONT_SM     = ("Helvetica Neue", 11)
-    BTN_PX      = 10           # button horizontal padding
-    BTN_PY      = 4            # button vertical padding
-
-
-def _sys_bg(parent) -> str:
-    """Detect the effective background color of a parent widget.
-    On macOS aqua, ttk.Frame returns a system color name that Tk understands."""
-    try:
-        ref = tk.Label(parent)
-        bg  = ref.cget("background")
-        ref.destroy()
-        return bg
-    except Exception:
-        return "#f2f2f2"
-
-
-# ── PButton ───────────────────────────────────────────────────────────────────
-# Drop-in replacement for ttk.Button.  Styles: "primary" | "secondary" | "ghost"
-# Usage:  PButton(parent, text="Label", command=fn, style="primary")
-# To lock/unlock: widget.config(state="disabled") / widget.config(state="normal")
-# ─────────────────────────────────────────────────────────────────────────────
-
-_BTN_STYLES = {
-    "primary":   (_DS.PRIMARY,   _DS.PRIMARY_FG,  _DS.PRIMARY_HV,  _DS.PRIMARY_PR,  _DS.PRIMARY,  0),
-    "secondary": (_DS.SEC_BG,    _DS.SEC_FG,      _DS.SEC_HV,      _DS.SEC_HV,      _DS.SEC_FG,   1),
-    "ghost":     (_DS.GHOST_BG,  _DS.GHOST_FG,    _DS.GHOST_HV,    _DS.GHOST_HV,    _DS.GHOST_BG, 0),
-}
-# columns: bg, fg, hover_bg, press_bg, border, border_width
-
-
-class PButton(tk.Frame):
-    """Design-system button.
-
-    Styles
-    ------
-    "primary"   – filled blue, white text        (generate, save actions)
-    "secondary" – white bg, blue border/text     (export, copy actions)
-    "ghost"     – no border, subtle hover        (browse, recent, template)
-
-    Extra flags
-    -----------
-    lock_exempt=True  – widget is never grayed-out by the form-locking system
-    """
-
-    _is_pwidget  = True
-
-    def __init__(self, parent, text="", command=None,
-                 style="secondary", state="normal",
-                 width=None, lock_exempt=False, **kw):
-        bg, fg, hv_bg, pr_bg, border, bdw = _BTN_STYLES.get(
-            style, _BTN_STYLES["secondary"])
-
-        # Outer frame acts as the visible border
-        super().__init__(parent, bg=border, padx=bdw, pady=bdw,
-                         cursor="hand2", **kw)
-        self._is_pwidget   = True
-        self._lock_exempt  = lock_exempt
-        self._style        = style
-        self._bg, self._fg = bg, fg
-        self._hv_bg        = hv_bg
-        self._pr_bg        = pr_bg
-        self._border_color = border
-        self._command      = command
-        self._disabled     = (state == "disabled")
-
-        self._inner = tk.Frame(self, bg=bg, cursor="hand2")
-        self._inner.pack(fill="both", expand=True)
-
-        lbl_kw = dict(bg=bg, fg=fg, font=_DS.FONT, cursor="hand2",
-                      padx=_DS.BTN_PX, pady=_DS.BTN_PY, anchor="center")
-        if width:
-            lbl_kw["width"] = width
-        self._lbl = tk.Label(self._inner, text=text, **lbl_kw)
-        self._lbl.pack(fill="both", expand=True)
-
-        if self._disabled:
-            self._apply_disabled()
-        else:
-            self._bind_events()
-
-    # ── visual states ────────────────────────────────────────────────────────
-
-    def _apply_disabled(self):
-        tk.Frame.config(self, bg=_DS.DIS_BORDER, cursor="")
-        self._inner.config(bg=_DS.DIS_BG, cursor="")
-        self._lbl.config(bg=_DS.DIS_BG, fg=_DS.DIS_FG, cursor="")
-
-    def _apply_normal(self):
-        tk.Frame.config(self, bg=self._border_color, cursor="hand2")
-        self._inner.config(bg=self._bg, cursor="hand2")
-        self._lbl.config(bg=self._bg, fg=self._fg, cursor="hand2")
-        self._bind_events()
-
-    def _bind_events(self):
-        for w in (self, self._inner, self._lbl):
-            w.bind("<Enter>",          self._on_enter,   add="+")
-            w.bind("<Leave>",          self._on_leave,   add="+")
-            w.bind("<Button-1>",       self._on_press,   add="+")
-            w.bind("<ButtonRelease-1>",self._on_release, add="+")
-
-    def _on_enter(self, e=None):
-        if self._disabled: return
-        self._inner.config(bg=self._hv_bg)
-        self._lbl.config(bg=self._hv_bg)
-
-    def _on_leave(self, e=None):
-        if self._disabled: return
-        self._inner.config(bg=self._bg)
-        self._lbl.config(bg=self._bg)
-
-    def _on_press(self, e=None):
-        if self._disabled: return
-        self._inner.config(bg=self._pr_bg)
-        self._lbl.config(bg=self._pr_bg)
-
-    def _on_release(self, e=None):
-        if self._disabled: return
-        self._on_leave()
-        if self._command:
-            self._command()
-
-    # ── public API ───────────────────────────────────────────────────────────
-
-    def config(self, **kw):
-        state = kw.pop("state", None)
-        text  = kw.pop("text", None)
-        cmd   = kw.pop("command", None)
-        if text    is not None: self._lbl.config(text=text)
-        if cmd     is not None: self._command = cmd
-        if state   is not None:
-            self._disabled = (state == "disabled")
-            if self._disabled:
-                self._apply_disabled()
-            else:
-                self._apply_normal()
-        if kw:
-            tk.Frame.config(self, **kw)
-
-    def cget(self, key):
-        if key == "text":  return self._lbl.cget("text")
-        if key == "state": return "disabled" if self._disabled else "normal"
-        return tk.Frame.cget(self, key)
-
-
-# ── PCheckbox ─────────────────────────────────────────────────────────────────
-# Drop-in replacement for ttk.Checkbutton.
-# Usage:  PCheckbox(parent, variable=boolvar, text=" Label", command=fn)
-# ─────────────────────────────────────────────────────────────────────────────
-
-class PCheckbox(tk.Frame):
-    """Design-system checkbox with a drawn indicator."""
-
-    _BOX  = 15   # box size in pixels
-    _is_pwidget = True
-
-    def __init__(self, parent, variable=None, text="",
-                 command=None, bg=None, **kw):
-        _bg = bg if bg else _sys_bg(parent)
-        super().__init__(parent, bg=_bg, cursor="hand2", **kw)
-        self._is_pwidget = True
-        self._var        = variable or tk.BooleanVar(value=False)
-        self._command    = command
-        self._disabled   = False
-        self._bg         = _bg
-
-        sz = self._BOX
-        self._canvas = tk.Canvas(self, width=sz, height=sz, bg=_bg,
-                                  highlightthickness=0, cursor="hand2")
-        self._canvas.pack(side="left", pady=2)
-
-        self._lbl = tk.Label(self, text=text, bg=_bg, fg=_DS.TEXT,
-                              font=_DS.FONT, cursor="hand2", anchor="w")
-        self._lbl.pack(side="left", padx=(5, 0))
-
-        self._var.trace_add("write", lambda *_: self._draw())
-        self._draw()
-
-        for w in (self, self._canvas, self._lbl):
-            w.bind("<Button-1>", self._toggle)
-            w.bind("<Enter>",    self._on_enter)
-            w.bind("<Leave>",    self._on_leave)
-
-    def _draw(self, hover=False):
-        c  = self._canvas
-        sz = self._BOX
-        c.delete("all")
-        if self._disabled:
-            c.create_rectangle(1, 1, sz-1, sz-1,
-                                outline=_DS.DIS_BORDER, fill=_DS.DIS_BG, width=1)
-            if self._var.get():
-                c.create_line(3, sz//2, sz//2-1, sz-3, sz-2, 3,
-                               fill=_DS.DIS_FG, width=2,
-                               capstyle="round", joinstyle="round")
-            return
-
-        checked  = self._var.get()
-        box_bg   = _DS.SEC_HV  if hover else _DS.ENTRY_BG
-        border   = _DS.PRIMARY if (checked or hover) else "#aaaaaa"
-        c.create_rectangle(1, 1, sz-1, sz-1,
-                            outline=border, fill=box_bg, width=1)
-        if checked:
-            c.create_line(3, sz//2, sz//2-1, sz-3, sz-2, 3,
-                           fill=_DS.PRIMARY, width=2,
-                           capstyle="round", joinstyle="round")
-
-    def _toggle(self, e=None):
-        if self._disabled: return
-        self._var.set(not self._var.get())
-        if self._command:
-            self._command()
-
-    def _on_enter(self, e=None):
-        if self._disabled: return
-        self._draw(hover=True)
-        self._lbl.config(fg=_DS.PRIMARY)
-
-    def _on_leave(self, e=None):
-        self._draw(hover=False)
-        self._lbl.config(fg=_DS.TEXT if not self._disabled else _DS.DIS_FG)
-
-    def config(self, **kw):
-        state = kw.pop("state", None)
-        text  = kw.pop("text", None)
-        if text  is not None: self._lbl.config(text=text)
-        if state is not None:
-            self._disabled = (state == "disabled")
-            cur = "" if self._disabled else "hand2"
-            fg  = _DS.DIS_FG if self._disabled else _DS.TEXT
-            tk.Frame.config(self, cursor=cur)
-            self._canvas.config(cursor=cur)
-            self._lbl.config(fg=fg, cursor=cur)
-            self._draw()
-        if kw:
-            tk.Frame.config(self, **kw)
-
-    def cget(self, key):
-        if key == "text":  return self._lbl.cget("text")
-        if key == "state": return "disabled" if self._disabled else "normal"
-        return tk.Frame.cget(self, key)
-
-
-# ── PRadioGroup ───────────────────────────────────────────────────────────────
-# Horizontal group of mutually-exclusive radio buttons styled to match PCheckbox.
-# Usage:
-#   var = tk.IntVar(value=0)
-#   PRadioGroup(parent, variable=var, options=["Auto", "Data min", "Manual"],
-#               command=callback)
-#   var.get()  ->  0 / 1 / 2
-# ─────────────────────────────────────────────────────────────────────────────
-
-class PRadioGroup(tk.Frame):
-    """Design-system horizontal radio button group."""
-
-    _RADIO = 13   # bullet size in px
-    _is_pwidget = True
-
-    def __init__(self, parent, variable=None, options=None,
-                 command=None, bg=None, **kw):
-        _bg = bg if bg else _sys_bg(parent)
-        super().__init__(parent, bg=_bg, **kw)
-        self._is_pwidget = True
-        self._var      = variable or tk.IntVar(value=0)
-        self._command  = command
-        self._disabled = False
-        self._bg       = _bg
-        self._btns     = []   # list of (canvas, label) per option
-
-        for idx, text in enumerate(options or []):
-            btn_frame = tk.Frame(self, bg=_bg, cursor="hand2")
-            btn_frame.pack(side="left", padx=(0, 14))
-
-            sz = self._RADIO
-            c  = tk.Canvas(btn_frame, width=sz, height=sz, bg=_bg,
-                           highlightthickness=0, cursor="hand2")
-            c.pack(side="left", pady=2)
-
-            lbl = tk.Label(btn_frame, text=text, bg=_bg, fg=_DS.TEXT,
-                           font=_DS.FONT, cursor="hand2", anchor="w")
-            lbl.pack(side="left", padx=(4, 0))
-
-            self._btns.append((c, lbl, btn_frame))
-            self._var.trace_add("write", lambda *_, i=idx, cv=c: self._draw_one(i, cv))
-            self._draw_one(idx, c)
-
-            for w in (btn_frame, c, lbl):
-                w.bind("<Button-1>", lambda e, i=idx: self._select(i))
-                w.bind("<Enter>",    lambda e, i=idx: self._on_enter(i))
-                w.bind("<Leave>",    lambda e, i=idx: self._on_leave(i))
-
-    def _draw_one(self, idx, c, hover=False):
-        c.delete("all")
-        sz       = self._RADIO
-        selected = (self._var.get() == idx)
-        if self._disabled:
-            border = _DS.DIS_BORDER
-            fill   = _DS.DIS_BG
-            dot    = _DS.DIS_FG
-        else:
-            border = _DS.PRIMARY if (selected or hover) else "#aaaaaa"
-            fill   = _DS.ENTRY_BG
-            dot    = _DS.PRIMARY
-        # Outer circle
-        c.create_oval(1, 1, sz-1, sz-1, outline=border, fill=fill, width=1)
-        # Inner dot when selected
-        if selected:
-            m = sz // 2
-            r = sz // 5
-            c.create_oval(m-r, m-r, m+r, m+r, fill=dot, outline="")
-
-    def _select(self, idx):
-        if self._disabled: return
-        self._var.set(idx)
-        if self._command:
-            self._command()
-
-    def _on_enter(self, idx):
-        if self._disabled or self._var.get() == idx: return
-        c, lbl, _ = self._btns[idx]
-        lbl.config(fg=_DS.PRIMARY)
-        self._draw_one(idx, c, hover=True)
-
-    def _on_leave(self, idx):
-        c, lbl, _ = self._btns[idx]
-        lbl.config(fg=_DS.TEXT if not self._disabled else _DS.DIS_FG)
-        self._draw_one(idx, c, hover=False)
-
-    def config(self, **kw):
-        state = kw.pop("state", None)
-        if state is not None:
-            self._disabled = (state == "disabled")
-            cur = "" if self._disabled else "hand2"
-            for c, lbl, fr in self._btns:
-                fg = _DS.DIS_FG if self._disabled else _DS.TEXT
-                fr.config(cursor=cur); c.config(cursor=cur)
-                lbl.config(fg=fg, cursor=cur)
-            for idx, (c, _, _) in enumerate(self._btns):
-                self._draw_one(idx, c)
-        if kw:
-            tk.Frame.config(self, **kw)
-
-    def cget(self, key):
-        if key == "state": return "disabled" if self._disabled else "normal"
-        return tk.Frame.cget(self, key)
-
-
-# ── PEntry ────────────────────────────────────────────────────────────────────
-# Drop-in replacement for ttk.Entry.
-# Usage:  PEntry(parent, textvariable=var, width=20, font=("Menlo", 12))
-# ─────────────────────────────────────────────────────────────────────────────
-
-class PEntry(tk.Frame):
-    """Design-system text entry with flat border and focus highlight."""
-
-    _is_pwidget = True
-
-    def __init__(self, parent, textvariable=None, width=None,
-                 font=None, state="normal", **kw):
-        # padx/pady=0  ->  thinner visual border (1 px via bg color only)
-        super().__init__(parent, bg=_DS.ENTRY_BDR, padx=0, pady=0, **kw)
-        self._is_pwidget = True
-        self._disabled   = (state == "disabled")
-
-        entry_kw = dict(
-            textvariable=textvariable,
-            relief="flat", bg=_DS.ENTRY_BG, fg=_DS.TEXT,
-            font=font or _DS.FONT,
-            insertbackground=_DS.PRIMARY,
-            highlightthickness=0, bd=0,
-            disabledbackground=_DS.DIS_BG,
-            disabledforeground=_DS.DIS_FG,
-        )
-        if width:
-            entry_kw["width"] = width
-        if state == "disabled":
-            entry_kw["state"] = "disabled"
-
-        self._entry = tk.Entry(self, **entry_kw)
-        # 1-px gap on all sides achieved via the frame bg showing through
-        self._entry.pack(fill="both", expand=True, padx=1, pady=1)
-
-        self._entry.bind("<FocusIn>",  self._on_focus)
-        self._entry.bind("<FocusOut>", self._on_blur)
-
-    def _on_focus(self, e=None):
-        if not self._disabled:
-            tk.Frame.config(self, bg=_DS.ENTRY_FOC)
-
-    def _on_blur(self, e=None):
-        tk.Frame.config(self, bg=_DS.ENTRY_BDR)
-
-    # ── compatibility layer (mirrors ttk.Entry / tk.Entry API) ───────────────
-
-    def config(self, **kw):
-        state = kw.pop("state", None)
-        fg    = kw.pop("foreground", kw.pop("fg", None))
-        if state is not None:
-            self._disabled = (state == "disabled")
-            if self._disabled:
-                self._entry.config(state="disabled",
-                                   bg=_DS.DIS_BG, fg=_DS.DIS_FG)
-                tk.Frame.config(self, bg=_DS.DIS_BORDER)
-            else:
-                self._entry.config(state="normal",
-                                   bg=_DS.ENTRY_BG, fg=_DS.TEXT)
-                tk.Frame.config(self, bg=_DS.ENTRY_BDR)
-        if fg is not None:
-            self._entry.config(fg=fg)
-        if kw:
-            try: self._entry.config(**kw)
-            except Exception: pass
-
-    def cget(self, key):
-        if key in ("foreground", "fg"):
-            return self._entry.cget("foreground")
-        try: return self._entry.cget(key)
-        except Exception: return tk.Frame.cget(self, key)
-
-    def state(self, statespec):
-        """ttk-style state method  -  only 'disabled' / '!disabled' used."""
-        if not statespec: return
-        s = statespec[0]
-        self.config(state="disabled" if s == "disabled" else "normal")
-
-    # delegate text manipulation and events to inner entry
-    def get(self):           return self._entry.get()
-    def insert(self, *a):    return self._entry.insert(*a)
-    def delete(self, *a):    return self._entry.delete(*a)
-    def bind(self, *a, **k): return self._entry.bind(*a, **k)
-
-    # make DnD registration work on the Frame itself
-    def drop_target_register(self, *a):
-        try: tk.Frame.drop_target_register(self, *a)
-        except Exception: pass
-    def dnd_bind(self, *a, **k):
-        try: tk.Frame.dnd_bind(self, *a, **k)
-        except Exception: pass
-
-
-# ── PCombobox ─────────────────────────────────────────────────────────────────
-# Drop-in replacement for ttk.Combobox.
-# Usage:  PCombobox(parent, textvariable=var, values=[...], state="readonly")
-# Forwards <<ComboboxSelected>> so existing bindings work unchanged.
-# ─────────────────────────────────────────────────────────────────────────────
-
-class PCombobox(tk.Frame):
-    """Design-system dropdown with flat border and focus highlight."""
-
-    _is_pwidget = True
-
-    def __init__(self, parent, textvariable=None, values=None,
-                 state="readonly", width=None, font=None, **kw):
-        super().__init__(parent, bg=_DS.ENTRY_BDR, padx=0, pady=0, **kw)
-        self._is_pwidget = True
-        self._disabled   = (state == "disabled")
-        self._state      = state     # "readonly" | "normal" | "disabled"
-
-        combo_kw = dict(
-            textvariable=textvariable,
-            values=values or [],
-            state=state,
-            font=font or _DS.FONT,
-        )
-        if width:
-            combo_kw["width"] = width
-
-        self._combo = ttk.Combobox(self, **combo_kw)
-        self._combo.pack(fill="both", expand=True, padx=1, pady=1)
-
-        self._combo.bind("<FocusIn>",           self._on_focus)
-        self._combo.bind("<FocusOut>",          self._on_blur)
-        self._combo.bind("<<ComboboxSelected>>", self._on_selected)
-        # Disable trackpad/mousewheel scroll-through on the dropdown list  - 
-        # accidental scrolling changes the selected value unexpectedly.
-        self._combo.bind("<MouseWheel>",  lambda e: "break")
-        self._combo.bind("<Button-4>",   lambda e: "break")   # Linux scroll up
-        self._combo.bind("<Button-5>",   lambda e: "break")   # Linux scroll down
-
-    def _on_focus(self, e=None):
-        if not self._disabled:
-            tk.Frame.config(self, bg=_DS.ENTRY_FOC)
-
-    def _on_blur(self, e=None):
-        tk.Frame.config(self, bg=_DS.ENTRY_BDR if not self._disabled else _DS.DIS_BORDER)
-
-    def _on_selected(self, e=None):
-        """Relay <<ComboboxSelected>> so callers bound to self still fire."""
-        self.event_generate("<<ComboboxSelected>>")
-
-    # ── compatibility API ─────────────────────────────────────────────────────
-
-    def config(self, **kw):
-        state  = kw.pop("state",  None)
-        values = kw.pop("values", None)
-        fg     = kw.pop("foreground", kw.pop("fg", None))
-        if values is not None:
-            self._combo.config(values=values)
-        if state is not None:
-            self._state    = state
-            self._disabled = (state == "disabled")
-            self._combo.config(state=state)
-            tk.Frame.config(self,
-                bg=_DS.DIS_BORDER if self._disabled else _DS.ENTRY_BDR)
-        if fg is not None:
-            try: self._combo.config(foreground=fg)
-            except Exception: pass
-        if kw:
-            try: self._combo.config(**kw)
-            except Exception: pass
-
-    def cget(self, key):
-        if key == "state": return self._state
-        if key in ("foreground", "fg"):
-            try: return self._combo.cget("foreground")
-            except Exception: return _DS.TEXT
-        try: return self._combo.cget(key)
-        except Exception: return tk.Frame.cget(self, key)
-
-    def state(self, statespec):
-        if not statespec: return
-        s = statespec[0]
-        self.config(state="disabled" if s == "disabled" else self._state
-                    if self._state != "disabled" else "readonly")
-
-    # ttk.Combobox text value API
-    def get(self):       return self._combo.get()
-    def set(self, val):  self._combo.set(val)
-
-    def bind(self, sequence=None, func=None, add=None):
-        """Route event bindings so callers get events from the inner combo."""
-        if sequence == "<<ComboboxSelected>>":
-            return self._combo.bind(sequence, func, add)
-        return tk.Frame.bind(self, sequence, func, add)
-
-
-# ── end design system ─────────────────────────────────────────────────────────
+# ── widget classes imported from plotter_widgets (see top-of-file imports) ───
 
 
 class App(TkinterDnD.Tk if _DND_AVAILABLE else tk.Tk):
@@ -1437,6 +393,14 @@ class App(TkinterDnD.Tk if _DND_AVAILABLE else tk.Tk):
         self._switching_tabs       = False   # True while TabManager.switch_to restores vars
         self._preview_after_id    = None   # pending after() id for live preview debounce
         self._live_preview_enabled = True  # can be toggled by user preference
+        # --- Wave 2 infrastructure ---
+        from plotter_events import EventBus
+        self._bus = EventBus()
+        from plotter_undo import UndoStack
+        self._undo_stack = UndoStack(max_depth=50)
+        from plotter_errors import reporter
+        reporter.set_root(self)
+        # --- end Wave 2 infrastructure ---
         ttk.Style().theme_use("aqua")
         set_dock_icon()
         self._set_tk_icon()
@@ -1451,6 +415,52 @@ class App(TkinterDnD.Tk if _DND_AVAILABLE else tk.Tk):
         self.after(250, self._watch_dock_icon)
         # Wire live-preview traces after the UI is fully built
         self.after(300, self._setup_live_preview)
+        # Session persistence: auto-save every 30 s, offer restore on launch
+        try:
+            from plotter_session import Session
+            self._session = Session()
+            self.after(500, self._session_restore_prompt)
+        except Exception:
+            self._session = None
+        self.protocol("WM_DELETE_WINDOW", self._on_quit)
+        self.after(30000, self._auto_save)
+
+    def _auto_save(self):
+        """Save session state to disk every 30 seconds."""
+        try:
+            if self._session is not None:
+                pt = self._plot_type.get() if hasattr(self, "_plot_type") else "bar"
+                state = self._session.capture(self._vars, pt, self.geometry())
+                self._session.save_to_disk(state)
+        except Exception:
+            pass
+        self.after(30000, self._auto_save)
+
+    def _session_restore_prompt(self):
+        """Offer to restore the previous session on startup."""
+        try:
+            if self._session is None:
+                return
+            saved = self._session.load_from_disk()
+            if not saved or not saved.get("vars"):
+                return
+            from tkinter import messagebox
+            if messagebox.askyesno("Restore Session",
+                                   "Restore your previous session?"):
+                self._session.restore(saved, self._vars)
+        except Exception:
+            pass
+
+    def _on_quit(self):
+        """Save session then destroy the window."""
+        try:
+            if self._session is not None:
+                pt = self._plot_type.get() if hasattr(self, "_plot_type") else "bar"
+                state = self._session.capture(self._vars, pt, self.geometry())
+                self._session.save_to_disk(state)
+        except Exception:
+            pass
+        self.destroy()
 
     def _set_tk_icon(self):
         photo = load_tk_icon()
@@ -1775,6 +785,8 @@ class App(TkinterDnD.Tk if _DND_AVAILABLE else tk.Tk):
 
         self.bind("<Command-r>", lambda e: self._run())
         self.bind("<Command-z>", lambda e: self._undo())
+        self.bind("<Command-Z>", lambda e: self._do_redo())
+        self.bind("<Command-s>", lambda e: self._save_project())
         self.bind("<Command-e>", lambda e: self._download_png())
         self.bind("<Command-o>", lambda e: self._browse_file())
         self.bind("<Command-c>", lambda e: self._copy_to_clipboard())
@@ -1805,6 +817,14 @@ class App(TkinterDnD.Tk if _DND_AVAILABLE else tk.Tk):
         file_menu.add_command(label="Open Excel File…",
                               accelerator="⌘O",
                               command=self._browse_file)
+        file_menu.add_command(label="Open .cplot Project…",
+                              command=self._open_cplot)
+        file_menu.add_command(label="Import .pzfx File…",
+                              command=self._open_pzfx)
+        file_menu.add_separator()
+        file_menu.add_command(label="Save Project…",
+                              accelerator="⌘S",
+                              command=self._save_project)
         file_menu.add_separator()
         file_menu.add_command(label="Generate Plot",
                               accelerator="⌘R",
@@ -1874,6 +894,30 @@ class App(TkinterDnD.Tk if _DND_AVAILABLE else tk.Tk):
         menubar.add_cascade(label="Help", menu=help_menu)
 
         self.config(menu=menubar)
+
+        # ── Chart-type keyboard shortcuts: ⌘1–⌘9 ─────────────────────────────
+        try:
+            from plotter_registry import KEYBOARD_SHORTCUTS, _REGISTRY_SPECS
+            _key_to_idx = {spec.key: i for i, spec in enumerate(_REGISTRY_SPECS)}
+            for num, chart_key in KEYBOARD_SHORTCUTS.items():
+                idx = _key_to_idx.get(chart_key)
+                if idx is not None:
+                    self.bind_all(f"<Command-Key-{num}>",
+                                  lambda e, i=idx: self._jump_to_chart(i))
+                    self.bind_all(f"<Control-Key-{num}>",
+                                  lambda e, i=idx: self._jump_to_chart(i))
+        except Exception:
+            pass
+
+    def _jump_to_chart(self, idx: int):
+        """Switch to chart type by registry index (used by ⌘1–⌘9)."""
+        try:
+            if hasattr(self, "_sb_select"):
+                self._sb_select(idx)
+            if hasattr(self, "_sb_show_pane"):
+                self._sb_show_pane(idx)
+        except Exception:
+            pass
 
     def _build_toolbar(self):
         """Build the bottom status/button bar.
@@ -2531,6 +1575,17 @@ class App(TkinterDnD.Tk if _DND_AVAILABLE else tk.Tk):
 
     def _open_wiki_popup(self):
         """Open the Reference Wiki in a floating popup window."""
+        try:
+            from plotter_app_wiki import open_wiki_popup
+            open_wiki_popup(self,
+                            track_popup_fn=self._track_popup,
+                            bind_scroll_fn=None)
+        except Exception as e:
+            from tkinter import messagebox
+            messagebox.showinfo("Wiki", f"Wiki unavailable: {e}")
+
+    def _open_wiki_popup_inline(self):
+        """Inline fallback wiki — kept for reference, not called directly."""
         dlg = tk.Toplevel(self)
         dlg.title("Reference Wiki")
         dlg.resizable(True, True)
@@ -3142,6 +2197,39 @@ class App(TkinterDnD.Tk if _DND_AVAILABLE else tk.Tk):
         _color_cb.bind("<<ComboboxSelected>>", _update_swatches)
         self.after(100, _update_swatches)
         r += 1
+
+        # ── Style Presets ──────────────────────────────────────────────────────
+        section_sep(g, r, "Style Presets"); r += 1
+        try:
+            from plotter_presets import BUILT_IN_PRESETS
+            _preset_names = ["— none —"] + list(BUILT_IN_PRESETS.keys())
+        except Exception:
+            _preset_names = ["— none —"]
+            BUILT_IN_PRESETS = {}
+        if "preset" not in self._vars:
+            self._vars["preset"] = tk.StringVar(value="— none —")
+        _preset_row = ttk.Frame(g)
+        _preset_row.grid(row=r, column=0, columnspan=3, sticky="ew", padx=PAD, pady=4)
+        _preset_cb = PCombobox(_preset_row, textvariable=self._vars["preset"],
+                               values=_preset_names, state="readonly", width=26,
+                               font=("Menlo", 12))
+        _preset_cb.pack(side="left")
+
+        def _apply_preset(*_):
+            name = self._vars["preset"].get()
+            preset = BUILT_IN_PRESETS.get(name, {})
+            for k, v in preset.items():
+                if k in self._vars:
+                    try:
+                        self._vars[k].set(v)
+                    except Exception:
+                        pass
+
+        PButton(_preset_row, text="Apply", style="ghost",
+                command=_apply_preset).pack(side="left", padx=(6, 0))
+        _preset_cb.bind("<<ComboboxSelected>>", _apply_preset)
+        r += 1
+
         section_sep(g, r, "Labels"); r += 1
 
         # Label fields  -  deliberately NO placeholder text.
@@ -6519,6 +5607,12 @@ class App(TkinterDnD.Tk if _DND_AVAILABLE else tk.Tk):
             daemon=True,
         ).start()
 
+    def _do_redo(self):
+        """Redo using the UndoStack (⌘⇧Z)."""
+        if hasattr(self, "_undo_stack") and self._undo_stack.can_redo():
+            self._undo_stack.redo(self._vars)
+            self._set_status("Redone")
+
     def _get_var(self, key, default=None):
         """Safely get a tkvar value, returning default if not present."""
         v = self._vars.get(key)
@@ -6819,6 +5913,8 @@ class App(TkinterDnD.Tk if _DND_AVAILABLE else tk.Tk):
 
     def _do_run(self, kw, tab_id=None, job_id=None):
         try:
+            if hasattr(self, "_bus"):
+                self._bus.emit("plot.started", kw=kw)
             pd = _pd()  # cached  -  no overhead after first call
             self._plt.close("all")
 
@@ -6912,10 +6008,13 @@ class App(TkinterDnD.Tk if _DND_AVAILABLE else tk.Tk):
                 fig, groups, kw=_kw_snap, tab_id=tab_id, job_id=job_id))
             # Re-enabled: populate results panel after plot embeds
             self.after(80, lambda: self._populate_results(_ep, _sh, _pt, _kw_snap))
-            pass
+            if hasattr(self, "_bus"):
+                self._bus.emit("plot.completed", kw=_kw_snap)
         except Exception:
             err = traceback.format_exc()
             short = err.strip().splitlines()[-1]
+            if hasattr(self, "_bus"):
+                self._bus.emit("plot.failed", error=short)
             self.after(0, lambda: self._set_status(f"Error: {short}", err=True))
             self.after(0, lambda: messagebox.showerror("Runtime error", err))
             self.after(0, self._reset_btn)
@@ -7395,6 +6494,142 @@ class App(TkinterDnD.Tk if _DND_AVAILABLE else tk.Tk):
                 err = traceback.format_exc()
                 self.after(0, lambda: self._set_status(f"PDF export error: {exc}", err=True))
         threading.Thread(target=_do_export, daemon=True).start()
+
+    # ── Project file support (.cplot) ─────────────────────────────────────────
+
+    def _save_project(self):
+        """Save current app state as a .cplot project file."""
+        from tkinter import filedialog, messagebox
+        try:
+            from plotter_project import save_project
+        except ImportError:
+            messagebox.showerror("Error", "plotter_project module not available.")
+            return
+
+        path = filedialog.asksaveasfilename(
+            title="Save Project",
+            defaultextension=".cplot",
+            filetypes=[("Claude Plotter Project", "*.cplot"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+
+        try:
+            plot_type = self._plot_type.get() if hasattr(self, "_plot_type") else "bar"
+            excel_path = self._vars.get("excel_path", tk.StringVar()).get().strip()
+            sheet_var = self._vars.get("sheet")
+            sheet = sheet_var.get() if sheet_var else 0
+
+            # Capture thumbnail bytes if we have a figure
+            thumbnail_bytes = None
+            try:
+                if hasattr(self, "_fig") and self._fig is not None:
+                    import io
+                    buf = io.BytesIO()
+                    self._fig.savefig(buf, format="png", dpi=72, bbox_inches="tight")
+                    thumbnail_bytes = buf.getvalue()
+            except Exception:
+                pass
+
+            save_project(
+                path=path,
+                app_vars=self._vars,
+                plot_type=plot_type,
+                excel_path=excel_path,
+                sheet=sheet,
+                thumbnail_bytes=thumbnail_bytes,
+            )
+            self._set_status(f"Project saved: {path}")
+        except Exception as exc:
+            messagebox.showerror("Save failed", str(exc))
+
+    def _open_cplot(self):
+        """Open a .cplot project file and restore app state."""
+        from tkinter import filedialog, messagebox
+        try:
+            from plotter_project import load_project, extract_to_temp_excel
+        except ImportError:
+            messagebox.showerror("Error", "plotter_project module not available.")
+            return
+
+        path = filedialog.askopenfilename(
+            title="Open Project",
+            filetypes=[("Claude Plotter Project", "*.cplot"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+
+        try:
+            data = load_project(path)
+
+            # Restore plot type
+            pt = data.get("plot_type", "bar")
+            if hasattr(self, "_plot_type"):
+                self._plot_type.set(pt)
+                self._on_chart_type_change(pt)
+
+            # Restore UI state
+            state = data.get("state", {})
+            for key, value in state.items():
+                var = self._vars.get(key)
+                if var is not None:
+                    try:
+                        var.set(value)
+                    except Exception:
+                        pass
+
+            # Extract embedded Excel data and load it
+            try:
+                temp_path = extract_to_temp_excel(path)
+                if temp_path and hasattr(self, "_vars"):
+                    ep_var = self._vars.get("excel_path")
+                    if ep_var:
+                        ep_var.set(temp_path)
+                    self._load_sheets(temp_path)
+            except Exception:
+                pass
+
+            self._set_status(f"Project loaded: {path}")
+        except Exception as exc:
+            messagebox.showerror("Open failed", str(exc))
+
+    def _open_pzfx(self):
+        """Import a GraphPad Prism .pzfx file."""
+        from tkinter import filedialog, messagebox
+        try:
+            from plotter_import_pzfx import import_pzfx
+        except ImportError:
+            messagebox.showerror("Error", "plotter_import_pzfx module not available.")
+            return
+
+        path = filedialog.askopenfilename(
+            title="Import .pzfx File",
+            filetypes=[("GraphPad Prism", "*.pzfx"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+
+        try:
+            result = import_pzfx(path)
+            if result.errors:
+                messagebox.showerror("Import Error",
+                                     "\n".join(result.errors))
+                return
+            if result.warnings:
+                messagebox.showwarning("Import Warnings",
+                                       "\n".join(result.warnings))
+            if result.temp_path:
+                ep_var = self._vars.get("excel_path")
+                if ep_var:
+                    ep_var.set(result.temp_path)
+                self._load_sheets(result.temp_path)
+                # Set chart type if detected
+                if result.chart_type and hasattr(self, "_plot_type"):
+                    self._plot_type.set(result.chart_type)
+                    self._on_chart_type_change(result.chart_type)
+                self._set_status(f"Imported: {path}")
+        except Exception as exc:
+            messagebox.showerror("Import failed", str(exc))
 
 
 if __name__ == "__main__":
