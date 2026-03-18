@@ -425,6 +425,17 @@ class App(TkinterDnD.Tk if _DND_AVAILABLE else tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_quit)
         self.after(30000, self._auto_save)
 
+        # Phase 3: start FastAPI server for Plotly rendering
+        try:
+            from plotter_server import start_server
+            start_server(app_instance=self)
+            self._web_server_running = True
+        except Exception:
+            self._web_server_running = False
+
+        # Phase 3: web view instances per tab
+        self._plotly_views: dict = {}
+
     def _auto_save(self):
         """Save session state to disk every 30 seconds."""
         try:
@@ -6019,6 +6030,26 @@ class App(TkinterDnD.Tk if _DND_AVAILABLE else tk.Tk):
             self.after(0, lambda: messagebox.showerror("Runtime error", err))
             self.after(0, self._reset_btn)
 
+    _WEBVIEW_CHART_TYPES = {"bar", "grouped_bar", "line", "scatter"}
+
+    def _try_webview_embed(self, plot_frame: "tk.Frame", chart_type: str, kw: dict) -> bool:
+        """Try to embed a Plotly chart via pywebview. Returns True on success."""
+        if not getattr(self, "_web_server_running", False):
+            return False
+        if chart_type not in self._WEBVIEW_CHART_TYPES:
+            return False
+        try:
+            from plotter_webview import PlotterWebView
+            from plotter_server import get_port
+            pv = PlotterWebView(plot_frame, port=get_port())
+            if not pv.show():
+                return False
+            pv.render(chart_type, kw)
+            self._plotly_views[id(plot_frame)] = pv
+            return True
+        except Exception:
+            return False
+
     def _embed_plot(self, fig, groups=None, kw=None, tab_id=None, job_id=None):
         """
         Display *fig* in the right pane, routed to the correct tab.
@@ -6051,6 +6082,20 @@ class App(TkinterDnD.Tk if _DND_AVAILABLE else tk.Tk):
             self._fig = fig
             if tab is not None:
                 tab.fig = fig
+
+            # Phase 3: try Plotly webview for priority chart types
+            _pt_web = kw.get("plot_type", "") if kw else ""
+            if not _pt_web and hasattr(self, "_plot_type"):
+                _pt_web = self._plot_type.get()
+            if hasattr(_pt_web, "get"):
+                _pt_web = _pt_web.get()
+            if kw and self._try_webview_embed(target_frame, str(_pt_web), kw):
+                # Successfully embedded via pywebview — still fall through
+                # to keep mpl figure for export, but skip Agg embedding
+                self._plot_frame = target_frame
+                if tab is not None:
+                    tab.canvas_widget = None
+                return
 
             # Hide the empty state overlay
             try:
