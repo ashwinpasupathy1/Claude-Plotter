@@ -207,21 +207,21 @@ plotter_barplot_app.py
 
 ## Test Suite
 
-438 tests across 5 suites, running in ~52 seconds on a modern Mac.
+520 tests across 6 suites, running in ~3 minutes on a modern Mac.
 
 ```bash
 # Run everything
 python3 run_all.py
 
 # Run a specific suite
-python3 run_all.py comprehensive      # 175 tests — all 0 chart types
-python3 run_all.py canvas_renderer    # 109 tests — tk.Canvas renderer
-python3 run_all.py modular            #  74 tests — widgets / validators / results
-python3 run_all.py p1p2p3             #  60 tests — style parameter regressions
+python3 run_all.py comprehensive      # 309 tests — all chart types + stats engine
+python3 run_all.py canvas_renderer    #  80 tests — tk.Canvas renderer
+python3 run_all.py modular            #  74 tests — widgets / validators / results / tabs
+python3 run_all.py p1p2p3             #  37 tests — style parameter regressions
 python3 run_all.py control            #  20 tests — control-group statistics
 ```
 
-All 438 tests must pass before any commit. If tests regress, fix them before doing anything else.
+All 520 tests must pass before any commit. If tests regress, fix them before doing anything else.
 
 ---
 
@@ -230,7 +230,7 @@ All 438 tests must pass before any commit. If tests regress, fix them before doi
 ### Quick syntax check
 
 ```bash
-python3 -c "import plotter_functions, plotter_canvas_renderer, plotter_widgets, plotter_validators, plotter_results; print('OK')"
+python3 -c "import plotter_functions, plotter_widgets, plotter_validators, plotter_results, plotter_registry, plotter_tabs, plotter_app_icons, plotter_presets, plotter_session, plotter_events, plotter_types, plotter_undo, plotter_errors, plotter_comparisons, plotter_project, plotter_import_pzfx, plotter_wiki_content, plotter_app_wiki; print('OK')"
 ```
 
 ### Adding a new chart type
@@ -259,4 +259,4 @@ docs: update README with pyramid chart layout
 
 ## Credits
 
-Built entirely by [Claude](https://claude.ai) (Anthropic) in collaboration with Ashwin Pasupathy across 13 sessions.
+Built entirely by [Claude](https://claude.ai) (Anthropic) in collaboration with Ashwin Pasupathy.
