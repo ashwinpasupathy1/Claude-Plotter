@@ -341,15 +341,18 @@ def _apply_legend(ax, legend_pos: str = "best", font_size: float = 12):
 # Stats helpers
 # ---------------------------------------------------------------------------
 
-def _p_to_stars(p: float) -> str:
+def _p_to_stars(p: float, threshold: float = None) -> str:
     """Convert a p-value to Prism-style asterisk annotation.
 
     Uses the module-level __p_sig_threshold__ so the app can raise or lower
     the significance cutoff (e.g. 0.01 to show only ** and above).
     Pairs with p > threshold are returned as 'ns' and will be hidden unless
     __show_ns__ is True.
+
+    threshold: if provided, overrides __p_sig_threshold__ (thread-safe caller path).
     """
-    if p > __p_sig_threshold__: return "ns"
+    _threshold = threshold if threshold is not None else __p_sig_threshold__
+    if p > _threshold: return "ns"
     if p <= 0.0001:  return "****"
     elif p <= 0.001: return "***"
     elif p <= 0.01:  return "**"
@@ -1152,6 +1155,11 @@ def _apply_stats_brackets(ax, groups: dict, group_order: list,
         control group (stats are run per-category cluster instead); callers
         should pass control=None for those chart types.
     """
+    # Capture module-level flags as locals for thread safety:
+    # The app sets these globals from the main thread before spawning the
+    # background plot thread; capturing locals ensures a consistent snapshot
+    # throughout this call even if another thread updates the globals.
+    _show_ns = __show_ns__
     if len(groups) < 1:
         return []
     # one_sample doesn't need a pairwise second group
@@ -1169,7 +1177,7 @@ def _apply_stats_brackets(ax, groups: dict, group_order: list,
                              n_permutations=n_permutations, control=control,
                              mc_correction=mc_correction, posthoc=posthoc,
                              mu0=mu0)
-    sig_results = [r for r in sig_results if r[3] != "ns" or __show_ns__]
+    sig_results = [r for r in sig_results if r[3] != "ns" or _show_ns]
 
     if sig_results:
         tops = bar_tops or {g: float(groups[g].max()) for g in group_order}
@@ -1736,6 +1744,7 @@ def plotter_grouped_barplot(
 
     n_cols = df_raw.shape[1]
 
+    _show_ns = __show_ns__  # thread-safe local snapshot
     # Unique categories (row 1) and subgroups (row 2), preserving order
     categories = list(dict.fromkeys(c for c in row1 if c))
     subgroups  = list(dict.fromkeys(s for s in row2 if s))
@@ -1841,7 +1850,7 @@ def plotter_grouped_barplot(
                                      n_permutations=n_permutations,
                                      mc_correction=mc_correction, posthoc=posthoc)
             sig_results = [r for r in sig_results
-                           if r[3] != "ns" or __show_ns__]
+                           if r[3] != "ns" or _show_ns]
             if not sig_results:
                 continue
 
@@ -2111,7 +2120,8 @@ def normality_warning(groups: dict, test_type: str) -> str:
     Return a warning string if normality is violated and a parametric test is selected.
     Returns empty string if no warning needed or if the flag is disabled.
     """
-    if not __show_normality_warning__:
+    _show_normality_warning = __show_normality_warning__  # thread-safe local snapshot
+    if not _show_normality_warning:
         return ""
     if test_type != "parametric":
         return ""
@@ -3409,6 +3419,7 @@ def plotter_two_way_anova(
         else:
             raise ValueError("Need at least 3 columns: Factor_A, Factor_B, Value.")
 
+    _show_ns = __show_ns__  # thread-safe local snapshot
     factor_a = cat_cols[0]
     factor_b = cat_cols[1]
     dv       = num_cols[-1]
@@ -3517,7 +3528,7 @@ def plotter_two_way_anova(
                 bracket_step = (y_top - 0) * 0.08
                 drawn = {}
                 for res in ph:
-                    if res["stars"] == "ns" and not __show_ns__:
+                    if res["stars"] == "ns" and not _show_ns:
                         continue
                     a_val = res["factor_b_level"]
                     b1, b2 = res["group1"], res["group2"]
@@ -3608,6 +3619,7 @@ def plotter_before_after(
             v = np.concatenate([v, np.full(max_n - len(v), np.nan)])
         aligned[g] = v
 
+    _show_ns = __show_ns__  # thread-safe local snapshot
     x_pos = {g: i for i, g in enumerate(group_order)}
     _draw_subject_lines(ax, group_order, aligned, x_pos)
 
@@ -3630,7 +3642,7 @@ def plotter_before_after(
         n  = min(len(groups[a]), len(groups[b]))
         _, p = stats.ttest_rel(groups[a][:n], groups[b][:n])
         stars = _p_to_stars(p)
-        if stars != "ns" or __show_ns__:
+        if stars != "ns" or _show_ns:
             y_top  = ax.get_ylim()[1]
             y_range = ax.get_ylim()[1] - ax.get_ylim()[0]
             bk_y   = y_top + y_range * 0.07
@@ -4689,6 +4701,7 @@ def plotter_repeated_measures(
         excel_path, sheet, color, None, figsize)
     plt.close(fig_tmp)
 
+    _show_ns = __show_ns__  # thread-safe local snapshot
     n_conditions = len(group_order)
 
     # Align subjects (same row order = same subject)
@@ -4799,7 +4812,7 @@ def plotter_repeated_measures(
                               ec="lightgray", alpha=0.88))
 
         sig_results = [r for r in sig_results
-                       if r[3] != "ns" or __show_ns__]
+                       if r[3] != "ns" or _show_ns]
         if sig_results:
             _draw_significance_brackets(
                 ax, sig_results,
