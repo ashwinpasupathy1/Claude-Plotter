@@ -31,6 +31,7 @@ python3 plotter_barplot_app.py
 
 # Web server (no display required)
 pip install -r requirements-web.txt
+cd plotter_web && npm install && npm run build && cd ..
 python3 plotter_web_server.py
 # Open http://localhost:7331
 
