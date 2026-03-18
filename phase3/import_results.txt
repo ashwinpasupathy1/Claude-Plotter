@@ -1,0 +1,9 @@
+  OK: plotter_plotly_theme
+  OK: plotter_spec_bar
+  OK: plotter_spec_grouped_bar
+  OK: plotter_spec_line
+  OK: plotter_spec_scatter
+  OK: plotter_server
+  OK: plotter_webview
+
+All 7 new Phase 3 modules import successfully
