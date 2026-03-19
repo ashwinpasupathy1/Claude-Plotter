@@ -187,12 +187,12 @@ if [ "$CODE_SIGN" = true ]; then
         info "  Signing with: $DEVELOPER_ID"
 
         # Sign all frameworks and dylibs first, then the app itself
-        find "$APP_BUNDLE" -name "*.dylib" -o -name "*.so" -o -name "*.framework" | while read -r lib; do
+        find "$APP_BUNDLE" \( -name "*.dylib" -o -name "*.so" -o -name "*.framework" \) -print0 | while IFS= read -r -d '' lib; do
             codesign --force --sign "$DEVELOPER_ID" --options runtime "$lib" 2>/dev/null || true
         done
 
         # Sign the main executable
-        codesign --deep --force --sign "$DEVELOPER_ID" \
+        codesign --force --sign "$DEVELOPER_ID" \
             --options runtime \
             --entitlements /dev/stdin "$APP_BUNDLE" <<ENTITLEMENTS
 <?xml version="1.0" encoding="UTF-8"?>
