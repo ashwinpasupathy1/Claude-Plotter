@@ -89,6 +89,28 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </html>"""
 
 
+class Api:
+    """JS-API object exposed to the pywebview frontend via js_api=Api().
+
+    JavaScript calls these methods as ``window.pywebview.api.open_file()``.
+    """
+
+    def open_file(self) -> str:
+        """Open a native file-picker and return the selected path (or '')."""
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        path = filedialog.askopenfilename(
+            filetypes=[
+                ("Data files", "*.xlsx *.xls *.csv"),
+                ("All files", "*.*"),
+            ]
+        )
+        root.destroy()
+        return path or ""
+
+
 class PlotterWebView:
     """Wraps a pywebview window for embedding Plotly charts.
 
@@ -129,6 +151,8 @@ class PlotterWebView:
             else:
                 url = None
 
+            _api = Api()
+
             def _create():
                 if url:
                     self._window = webview.create_window(
@@ -136,6 +160,7 @@ class PlotterWebView:
                         url=url,
                         width=900, height=700,
                         resizable=True,
+                        js_api=_api,
                     )
                 else:
                     html = _HTML_TEMPLATE.format(PORT=self._port)
@@ -144,6 +169,7 @@ class PlotterWebView:
                         html=html,
                         width=900, height=700,
                         resizable=True,
+                        js_api=_api,
                     )
                 self._ready.set()
                 webview.start()

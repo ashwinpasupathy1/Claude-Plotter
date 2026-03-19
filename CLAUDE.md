@@ -1,144 +1,596 @@
-# Claude Plotter — Project Context for Claude Code
+# Spectra — Comprehensive LLM Context Document
 
-GraphPad Prism-style scientific plotting application for macOS.
-Built entirely by Claude (Anthropic) with Ashwin Pasupathy.
+_Last updated: 2026-03-18. Agents A-E deployed._
 
----
-
-## The one rule before every commit
-
-```bash
-python3 run_all.py   # must print 438/438 (or higher) with 0 failures
-```
-
-Never commit if this fails. Never skip it. If tests regress, fix them before
-doing anything else.
+This document is written for LLMs reading the codebase cold. After reading this file you should understand the full architecture, every file, all 29 chart types, the API contract, the stats engine, how to add a new chart type, and how to run tests. This file is the authoritative reference; docs/PLAN.md contains architectural decisions and rationale.
 
 ---
 
-## Commands
+## Section 1: Product Overview
 
-```bash
-# Run the full test suite (438 tests across 6 suites, ~120 seconds)
-python3 run_all.py
+**Spectra** is a GraphPad Prism-style scientific plotting desktop application for macOS. Target users are researchers and scientists who need publication-quality charts with real statistics, without writing code.
 
-# Run a single suite
-python3 run_all.py comprehensive      # 175 tests — all chart types + stats engine
-python3 run_all.py canvas_renderer    #  109 tests — tk.Canvas renderer
-python3 run_all.py modular            #  74 tests — widgets/validators/results/tabs
-python3 run_all.py p1p2p3             #  60 tests — style params
-python3 run_all.py control            #  20 tests — control-group logic
+### How it runs
 
-# Launch the app (needs a display — use xvfb-run on headless systems)
-python3 plotter_barplot_app.py
-# On headless CI:  xvfb-run python3 plotter_barplot_app.py
+From the user's perspective: double-click `Spectra.app`, a native window opens. No terminal, no visible server, no browser tabs.
 
-# Quick syntax check of all modules
-python3 -c "import plotter_functions, plotter_widgets, plotter_validators, plotter_results, plotter_registry, plotter_tabs, plotter_app_icons, plotter_presets, plotter_session, plotter_events, plotter_types, plotter_undo, plotter_errors, plotter_comparisons, plotter_project, plotter_import_pzfx, plotter_wiki_content, plotter_app_wiki; print('OK')"
-```
+Under the hood:
+- `plotter_webview.py` (the entry point) starts a FastAPI server on a background thread at `127.0.0.1:7331`, then opens a pywebview window (WKWebView on macOS)
+- The pywebview window loads the React SPA served by FastAPI at `/`
+- The React SPA calls FastAPI endpoints to render charts and load data
+- All computation runs in Python; JavaScript only renders
+
+### What it is NOT
+
+- Not a web app. Web deployment is not a goal and must not influence architecture.
+- Not a Tkinter app going forward. `plotter_barplot_app.py` is a 6,688-line spec document for the React UI — it is not maintained.
 
 ---
 
-## File map
+## Section 2: Architecture
+
+### Full system diagram
 
 ```
-# ── Core application ──────────────────────────────────────────────
-plotter_barplot_app.py      6,688 lines   App class, PLOT_REGISTRY, icon helpers
-plotter_functions.py        6,553 lines   29+ matplotlib chart functions
-plotter_widgets.py            952 lines   _DS tokens, PButton/PEntry/PCheckbox etc.
-plotter_validators.py         518 lines   Standalone spreadsheet validators
-plotter_results.py            401 lines   Results panel: populate / export / copy
-
-# ── Phase 2 infrastructure modules ────────────────────────────────
-plotter_registry.py           475 lines   PlotTypeConfig registry (moved from app)
-plotter_tabs.py               532 lines   Multi-tab state (TabState, TabManager, TabBar)
-plotter_app_icons.py          352 lines   Sidebar icon drawing for all chart types
-plotter_presets.py            163 lines   Style preset load/save (.json)
-plotter_session.py             77 lines   Session persistence (last-used settings)
-plotter_events.py              75 lines   EventBus for decoupled pub/sub messaging
-plotter_types.py              121 lines   Shared type definitions and dataclasses
-plotter_undo.py               131 lines   UndoStack for undo/redo support
-plotter_errors.py              99 lines   ErrorReporter: structured error handling
-plotter_comparisons.py        248 lines   Custom comparison builder UI
-plotter_project.py            207 lines   .cplot project file save/open (ZIP format)
-plotter_import_pzfx.py        316 lines   GraphPad .pzfx file importer
-plotter_wiki_content.py     2,224 lines   Statistical wiki content (29 sections)
-plotter_app_wiki.py           522 lines   Wiki popup viewer (Tk UI)
-
-# ── Test infrastructure ────────────────────────────────────────────
-plotter_test_harness.py       363 lines   Shared test bootstrap (imports once)
-run_all.py                    112 lines   6-suite unified test runner
-tests/test_comprehensive.py 1,341 lines   Main chart function tests
-tests/test_canvas_renderer.py 1,306 lines  Canvas renderer + GroupedCanvasRenderer
-tests/test_modular.py         599 lines   Widgets / validators / results / tabs
-tests/test_p1_p2_p3.py        796 lines   Style parameter regression tests
-tests/test_control.py         437 lines   Control-group statistics tests
+User double-clicks Spectra.app
+        │
+        ▼
+plotter_webview.py                     ← desktop entry point
+  ├── starts FastAPI server             (background thread, 127.0.0.1:7331)
+  │     plotter_server.py              ← FastAPI app factory
+  │       ├── POST /render             → plotter_spec_*.py  → Plotly JSON
+  │       ├── POST /render-png         → plotter_functions.py → base64 PNG
+  │       ├── GET  /chart-types        → returns metadata for all 29 types
+  │       ├── POST /event              → sync on-chart edits back to state
+  │       └── GET  /health             → {"status": "ok"}
+  └── opens pywebview window           (WKWebView, full-screen native)
+        │
+        ▼
+React SPA  (plotter_web/src/)
+  ├── sidebar:         29 chart types, 7 groups
+  ├── chart area:      Plotly.js (interactive) or <img> (PNG fallback)
+  ├── right panel:     Data | Axes | Style | Stats tabs
+  ├── help panel:      slide-in wiki (plotter_wiki_content.py sections)
+  └── results strip:   collapsible stats output
+        │
+        │  POST /render { chart_type, kw }    → Plotly JSON spec
+        │  POST /render-png { chart_type, kw } → base64 PNG
+        ▼
+plotter_server.py  (FastAPI)
+  ├── Plotly path:  plotter_spec_bar/grouped_bar/line/scatter.py
+  └── PNG path:     plotter_functions.py  (29 matplotlib chart functions)
 ```
 
----
+### Rendering pipeline — two paths
 
-## Architecture overview
-
-### Rendering pipeline
-
+**Plotly path** (4 priority chart types: bar, grouped_bar, line, scatter):
 ```
-User clicks "Generate Plot"
-    ↓
-App._run()  →  App._do_run() [background thread]
-    │  calls plotter_functions.plotter_barplot(**kw)  →  matplotlib fig, ax
-    │  deepcopy(kw) → _kw_snap
-    └→ after(0) → App._embed_plot(fig, groups, kw=_kw_snap)
-                       │
-              canvas_mode && plot_type in ("bar","grouped_bar")?
-               ├─ YES → App._try_canvas_embed(fig, kw)
-               │         builds BarScene / GroupedBarScene
-               │         CanvasRenderer / GroupedCanvasRenderer
-               │         live hit-test, recolor, Y-drag, bar-width drag
-               └─ NO  → FigureCanvasTkAgg(fig)   ← standard Agg path
+React → POST /render { chart_type, kw }
+  → plotter_server._build_spec(chart_type, kw)
+  → plotter_spec_*.build_*_spec(kw)
+  → reads Excel/CSV with pandas
+  → builds plotly.graph_objects.Figure
+  → returns JSON string
+  → server wraps in { ok: true, spec: <parsed JSON> }
+  → React renders with Plotly.js (interactive, editable: true)
+```
+
+**PNG fallback path** (remaining 25 chart types):
+```
+React → POST /render-png { chart_type, kw }
+  → plotter_server routes to correct plotter_functions.py function
+  → matplotlib renders fig
+  → base64-encodes PNG
+  → returns { ok: true, image: "data:image/png;base64,..." }
+  → React renders in <img> tag
 ```
 
 ### Dependency graph
 
 ```
-plotter_barplot_app.py
-  ├── plotter_widgets.py          (no prism deps — pure Tk + constants)
-  ├── plotter_validators.py       (no prism deps — pure pandas)
-  ├── plotter_results.py          (receives app object; no other prism imports)
-  ├── plotter_functions.py        (numpy, pandas, matplotlib, scipy — all lazy)
-  └── plotter_canvas_renderer.py  (numpy, pandas — NO matplotlib)
+plotter_server.py
+  ├── plotter_spec_bar.py
+  │     └── plotter_plotly_theme.py
+  ├── plotter_spec_grouped_bar.py
+  │     └── plotter_plotly_theme.py
+  ├── plotter_spec_line.py
+  │     └── plotter_plotly_theme.py
+  ├── plotter_spec_scatter.py
+  │     └── plotter_plotly_theme.py
+  └── plotter_functions.py       (matplotlib, lazy-loaded)
+        └── plotter_validators.py (no external deps)
+
+plotter_webview.py
+  └── plotter_server.py
+
+plotter_registry.py              (no prism deps — pure dataclasses)
+plotter_validators.py            (no prism deps — pure pandas)
+plotter_results.py               (receives app object; no other prism imports)
+plotter_widgets.py               (no prism deps — pure Tk + constants)
 ```
-
-### Key App methods
-
-| Method | What it does |
-|---|---|
-| `App._do_run(kw)` | Background thread: calls plot function, schedules `_embed_plot` |
-| `App._embed_plot(fig, groups, kw)` | Main thread: shows chart (canvas or Agg) |
-| `App._try_canvas_embed(fig, kw)` | Builds tk.Canvas renderer; returns True/False |
-| `App._collect(excel)` → `kw` | Assembles full kwargs dict from all UI vars |
-| `App._collect_display(kw)` | Error bars, points, colours, alpha, axis style |
-| `App._collect_labels(kw)` | Title, xlabel, ytitle |
-| `App._collect_stats(kw)` | Stats test, posthoc, correction, permutations |
-| `App._collect_figsize(kw)` | figsize, bar_width, font_size, jitter |
-| `App._validate_spreadsheet()` | Reads sheet, dispatches to validator, shows result |
-| `App._populate_results(...)` | Delegated to `plotter_results.populate_results(app,...)` |
-| `App._build_sidebar(left)` | Chart-type selector (icons + labels) |
-| `App._tab_data(f, mode)` | Data tab: file picker, sheet, color, labels |
-| `App._tab_axes(f, mode)` | Axes tab: Y scale, limits, font, bar width |
-| `App._tab_stats(f)` | Stats tab: test type, posthoc, correction |
 
 ---
 
-## Adding a new chart type — the 5-step checklist
+## Section 3: Complete File Map
 
-### Step 1 — Write the plot function in `plotter_functions.py`
+### Core computation
 
-Insert **before** the `# P20 — Export all chart types` block (around line 5586).
+**`plotter_functions.py`** (~6,553 lines)
+- Purpose: All 29 matplotlib chart functions plus the complete stats engine
+- Key functions: `_ensure_imports()`, `_base_plot_setup()`, `_base_plot_finish()`, `_style_kwargs()`, `_apply_plotter_style()`, `_apply_stats_brackets()`, `_apply_grid()`, `_apply_legend()`, `_apply_log_formatting()`, `_set_categorical_xticks()`, `_draw_jitter_points()`, `_calc_error()`, `_calc_error_asymmetric()`, `_assign_colors()`, `_darken_color()`, `_run_stats()`, `_p_to_stars()`, `_apply_correction()`, `normality_warning()`
+- Key constants: `PRISM_PALETTE`, `AXIS_STYLES`, `TICK_DIRS`, `LEGEND_POSITIONS`, `_DPI=144`, `_FONT="Arial"`, `_ALPHA_BAR=0.85`
+- Dependencies: `numpy`, `pandas`, `matplotlib` (lazy), `seaborn` (lazy), `scipy.stats` (lazy)
+- DO NOT import matplotlib at module level — it is lazy-loaded by `_ensure_imports()`
+- DO NOT delete any chart functions — all 29 are tested
 
-Every function must follow this exact template:
+**`plotter_validators.py`** (~518 lines)
+- Purpose: Standalone spreadsheet validation — each function takes a raw pandas DataFrame and returns `(errors: list[str], warnings: list[str])`
+- Key functions: `validate_flat_header()`, `validate_line()`, `validate_grouped_bar()`, `validate_kaplan_meier()`, `validate_heatmap()`, `validate_two_way_anova()`, `validate_contingency()`, `validate_chi_square_gof()`, `validate_bland_altman()`, `validate_forest_plot()`, `validate_pyramid()`
+- Dependencies: `pandas` (lazy via `_pd()`)
+- Pure functions — no side effects, no Tk, no matplotlib
+
+**`plotter_results.py`** (~401 lines)
+- Purpose: Compute and display descriptive stats, test results, post-hoc comparisons, normality tables in the results panel
+- Key functions: `populate_results(app, excel_path, sheet, plot_type, kw_snapshot)`, `export_results_csv(app)`, `copy_results_tsv(app)`
+- Note: This module still renders Tk Treeview widgets for the legacy Tk app; in the React app this role is handled by the React results strip component receiving data from `/render`
+
+**`plotter_registry.py`** (~475 lines)
+- Purpose: Single source of truth for all 29 chart type configurations
+- Key class: `PlotTypeConfig` — dataclass with fields: `key`, `label`, `fn_name`, `tab_mode`, `stats_tab`, `validate`, `extra_collect`, `has_points`, `has_error_bars`, `has_legend`, `has_stats`, `x_continuous`, `axes_has_bar_width`, `axes_has_line_opts`
+- Key collections: `_REGISTRY_SPECS` (list of 29 `PlotTypeConfig`), `KEYBOARD_SHORTCUTS`, `ERROR_TYPE_MAP`, `STATS_TEST_MAP`, `MARKER_STYLE_MAP`
+- Key method: `PlotTypeConfig.filter_kwargs(kw, fn)` — introspects function signature to strip unsupported kwargs (replaces manual `strip_keys`/`keep_keys`)
+- To add a new chart type: append a `PlotTypeConfig` entry here. No other file needs to change (except the function file, validator, and tests).
+
+### FastAPI server and Plotly spec builders
+
+**`plotter_server.py`**
+- Purpose: FastAPI app factory; all HTTP endpoints
+- Key endpoints: `POST /render`, `POST /render-png`, `POST /event`, `GET /health`, `GET /chart-types`
+- Key functions: `start_server(app_instance=None)`, `get_port()`, `_build_spec(chart_type, kw)`, `_dispatch_event(event, value, extra)`
+- Auth: `PLOTTER_API_KEY` env var required for non-local requests; local (`127.0.0.1`/`localhost`) bypasses auth
+- DO NOT touch while Agent B is working
+
+**`plotter_webview.py`**
+- Purpose: Desktop entry point — starts FastAPI server thread, opens pywebview window
+- Key class: `PlotterWebView` — wraps a pywebview window; methods `show()`, `render(chart_type, kw)`, `destroy()`
+- The HTML template embedded in this file loads Plotly.js from CDN and defines `window.plotterRender(chartType, kw)`
+- DO NOT touch while other agents are working
+
+**`plotter_spec_bar.py`**
+- Purpose: Build Plotly JSON spec for bar charts
+- Key function: `build_bar_spec(kw: dict) -> str` — reads Excel, computes means + SEM, returns `fig.to_json()`
+- Dependencies: `plotly.graph_objects` (lazy import inside function), `pandas`, `plotter_plotly_theme`
+
+**`plotter_spec_grouped_bar.py`**
+- Purpose: Build Plotly JSON spec for grouped bar charts (two-row header Excel layout)
+- Key function: `build_grouped_bar_spec(kw: dict) -> str`
+
+**`plotter_spec_line.py`**
+- Purpose: Build Plotly JSON spec for line graphs
+- Key function: `build_line_spec(kw: dict) -> str` — reads first column as X, remaining columns as series
+
+**`plotter_spec_scatter.py`**
+- Purpose: Build Plotly JSON spec for scatter plots (same layout as line, mode="markers")
+- Key function: `build_scatter_spec(kw: dict) -> str`
+
+**`plotter_plotly_theme.py`**
+- Purpose: Shared Plotly theme matching matplotlib Prism style
+- Key exports: `PRISM_PALETTE` (10 hex colors), `PRISM_TEMPLATE` (full layout dict), `apply_open_spine(layout_update)`
+- White background, Arial font, open spines (left+bottom only), outside ticks
+
+### Legacy Tk app (spec reference only)
+
+**`plotter_barplot_app.py`** (~6,688 lines)
+- Purpose: The original Tkinter app — now a living spec for the React UI
+- DO NOT maintain going forward; the React UI replaces it
+- Key methods to read when building React UI: `_tab_data()`, `_tab_axes()`, `_tab_stats()`, `_collect()` (defines the full `kw` dict = API contract), `_build_sidebar()` (29 chart types + groupings)
+- All `_tab_stats_*` variants define chart-specific stats controls
+
+**`plotter_widgets.py`** (~952 lines)
+- Purpose: Tk design tokens and widget classes — reference for React style constants
+- Key class: `_DS` — color/font constants (`_DS.PRIMARY = "#2274A5"`, etc.)
+- Key widgets: `PButton`, `PEntry`, `PCheckbox`, `PCombobox`
+- Also contains: `LABELS`, `HINTS` dicts (human-readable names + tooltips for every field)
+
+### Phase 2 infrastructure (mostly superseded by React state)
+
+**`plotter_tabs.py`** (~532 lines) — `TabState`, `TabManager`, `TabBar` for multi-tab support; not yet wired into React
+
+**`plotter_session.py`** (~77 lines) — Session persistence: auto-save/restore last-used settings as JSON
+
+**`plotter_events.py`** (~75 lines) — `EventBus` for decoupled pub/sub messaging; optional, not widely used
+
+**`plotter_types.py`** (~121 lines) — Shared dataclasses and type definitions
+
+**`plotter_undo.py`** (~131 lines) — `UndoStack` for undo/redo support
+
+**`plotter_errors.py`** (~99 lines) — `ErrorReporter` for structured, user-friendly error messages
+
+**`plotter_comparisons.py`** (~248 lines) — Custom comparison builder: UI for selecting specific group pairs for stats tests
+
+**`plotter_presets.py`** (~163 lines) — Style preset system: load/save named presets as `.json`
+
+**`plotter_app_wiki.py`** (~522 lines) — Tk wiki popup viewer (retired; React help panel replaces this)
+
+**`plotter_app_icons.py`** (~352 lines) — SVG icon definitions for all 29 chart types; reference for React sidebar icons
+
+### Data and content
+
+**`plotter_wiki_content.py`** (~2,224 lines)
+- Purpose: Statistical reference wiki — 29 sections covering all supported tests with formulas, assumptions, and citations
+- Key export: `WIKI_SECTIONS` — list of dicts with `title`, `tags`, `subsections`
+- The React help panel renders these sections as formatted HTML
+
+**`plotter_import_pzfx.py`** (~316 lines)
+- Purpose: Import GraphPad Prism `.pzfx` (XML) files
+- Key classes: `PzfxTable`, `PzfxImportResult`
+- Extracts data tables, group names, titles; writes to a temp `.xlsx` file
+- Uses only stdlib (`xml.etree.ElementTree`) + `openpyxl`
+
+**`plotter_project.py`** (~207 lines)
+- Purpose: Save/load `.cplot` project files (ZIP archives)
+- ZIP contents: `manifest.json`, `state.json`, `plot_type.json`, `comparisons.json`, `data/` (CSV sheets), `thumbnail.png` (optional)
+- Key functions: `save_project(path, app_vars, plot_type, excel_path, ...)`, `load_project(path)`
+
+### Test infrastructure
+
+**`run_all.py`** (~112 lines) — Unified test runner; runs all suites in one Python process sharing the loaded `plotter_functions` module
+
+**`tests/plotter_test_harness.py`** (~363 lines) — Shared bootstrap: imports once, provides fixtures `bar_excel`, `line_excel`, `grouped_excel`, `km_excel`, `heatmap_excel`, `two_way_excel`, `contingency_excel`, `with_excel`
+
+---
+
+## Section 4: All 29 Chart Types
+
+| Key | UI Label | Group | Function | Has Plotly Spec | Excel Layout |
+|---|---|---|---|---|---|
+| `bar` | Bar Chart | Column | `plotter_barplot` | Yes | Row 0: group names; rows 1+: numeric values |
+| `box` | Box Plot | Column | `plotter_boxplot` | No (PNG) | Row 0: group names; rows 1+: numeric values |
+| `violin` | Violin Plot | Column | `plotter_violin` | No (PNG) | Row 0: group names; rows 1+: numeric values |
+| `dot_plot` | Dot Plot | Column | `plotter_dot_plot` | No (PNG) | Row 0: group names; rows 1+: numeric values |
+| `subcolumn_scatter` | Subcolumn | Column | `plotter_subcolumn_scatter` | No (PNG) | Row 0: group names; rows 1+: numeric values |
+| `before_after` | Before / After | Column | `plotter_before_after` | No (PNG) | Row 0: group names; rows 1+: numeric values |
+| `repeated_measures` | Repeated Meas. | Column | `plotter_repeated_measures` | No (PNG) | Row 0: timepoint names; rows 1+: numeric values |
+| `scatter` | Scatter Plot | XY | `plotter_scatterplot` | Yes | Row 0: X-label + series names; rows 1+: X value, Y replicates |
+| `line` | Line Graph | XY | `plotter_linegraph` | Yes | Row 0: X-label + series names; rows 1+: X value, Y replicates |
+| `curve_fit` | Curve Fit | XY | `plotter_curve_fit` | No (PNG) | Row 0: X-label + series names; rows 1+: X value, Y replicates |
+| `area_chart` | Area Chart | XY | `plotter_area_chart` | No (PNG) | Row 0: X-label + series names; rows 1+: X value, Y replicates |
+| `bubble` | Bubble Chart | XY | `plotter_bubble` | No (PNG) | Row 0: X, Y, Size, (Label); rows 1+: values |
+| `bland_altman` | Bland-Altman | XY | `plotter_bland_altman` | No (PNG) | Row 0: Method A name, Method B name; rows 1+: paired measurements |
+| `grouped_bar` | Grouped Bar | Grouped | `plotter_grouped_barplot` | Yes | Row 0: category names; row 1: subgroup names; rows 2+: numeric values |
+| `stacked_bar` | Stacked Bar | Grouped | `plotter_stacked_bar` | No (PNG) | Row 0: category names; row 1: subgroup names; rows 2+: numeric values |
+| `two_way_anova` | Two-Way ANOVA | Grouped | `plotter_two_way_anova` | No (PNG) | Headers: `Factor_A`, `Factor_B`, `Value`; one row per observation |
+| `histogram` | Histogram | Distribution | `plotter_histogram` | No (PNG) | Row 0: group names; rows 1+: numeric values |
+| `ecdf` | ECDF | Distribution | `plotter_ecdf` | No (PNG) | Row 0: group names; rows 1+: numeric values |
+| `qq_plot` | Q-Q Plot | Distribution | `plotter_qq_plot` | No (PNG) | Row 0: group names; rows 1+: numeric values |
+| `column_stats` | Col Statistics | Distribution | `plotter_column_stats` | No (PNG) | Row 0: group names; rows 1+: numeric values |
+| `kaplan_meier` | Survival Curve | Survival | `plotter_kaplan_meier` | No (PNG) | Row 0: group names (each spanning 2 cols); row 1: "Time", "Event"; rows 2+: time value, 0/1 |
+| `heatmap` | Heatmap | Correlation | `plotter_heatmap` | No (PNG) | Row 0: blank + column labels; rows 1+: row label + numeric values |
+| `forest_plot` | Forest Plot | Correlation | `plotter_forest_plot` | No (PNG) | Headers: `Study`, `Effect`, `Lower CI`, `Upper CI`; one row per study |
+| `contingency` | Contingency | Correlation | `plotter_contingency` | No (PNG) | Row 0: blank + outcome labels; rows 1+: group name + counts |
+| `chi_square_gof` | Chi-Sq GoF | Correlation | `plotter_chi_square_gof` | No (PNG) | Row 0: category names; row 1: observed counts; row 2 (optional): expected counts |
+| `waterfall` | Waterfall | Other | `plotter_waterfall` | No (PNG) | Row 0: category names; rows 1+: numeric values |
+| `lollipop` | Lollipop | Other | `plotter_lollipop` | No (PNG) | Row 0: group names; rows 1+: numeric values |
+| `pyramid` | Pyramid | Other | `plotter_pyramid` | No (PNG) | Row 0: `Category`, left series name, right series name; rows 1+: values |
+| `raincloud` | Raincloud | Other | `plotter_raincloud` | No (PNG) | Row 0: group names; rows 1+: numeric values |
+
+---
+
+## Section 5: API Reference
+
+All endpoints are served by `plotter_server.py` on `127.0.0.1:7331`.
+
+### GET /health
+
+Returns `{"status": "ok"}`. Used to check if the server is running.
+
+### GET /chart-types
+
+Returns metadata for all 29 chart types.
+
+Response:
+```json
+{
+  "ok": true,
+  "chart_types": [
+    {
+      "key": "bar",
+      "label": "Bar Chart",
+      "group": "Column",
+      "tab_mode": "bar",
+      "has_plotly_spec": true
+    }
+  ]
+}
+```
+
+### POST /render
+
+Accepts chart kwargs, returns a Plotly figure spec. Only works for the 4 priority types (bar, grouped_bar, line, scatter).
+
+Request body:
+```json
+{
+  "chart_type": "bar",
+  "kw": {
+    "excel_path": "/path/to/data.xlsx",
+    "sheet": 0,
+    "title": "My Chart",
+    "xlabel": "Groups",
+    "ytitle": "Mean ± SEM",
+    "color": null
+  }
+}
+```
+
+Response (success):
+```json
+{
+  "ok": true,
+  "spec": {
+    "data": [...],
+    "layout": {...}
+  }
+}
+```
+
+Response (error):
+```json
+{
+  "ok": false,
+  "error": "Unknown chart type: foo"
+}
+```
+
+### POST /render-png
+
+Calls `plotter_functions.py` to render any of the 25 non-Plotly chart types via matplotlib, returns base64 PNG.
+
+Request body:
+```json
+{
+  "chart_type": "violin",
+  "kw": {
+    "excel_path": "/path/to/data.xlsx",
+    "title": "My Violin"
+  }
+}
+```
+
+Response (success):
+```json
+{
+  "ok": true,
+  "image": "data:image/png;base64,iVBORw0KGgo..."
+}
+```
+
+### POST /event
+
+Receives edit events from the React frontend (on-chart title/axis edits via Plotly's `plotly_relayout`). Dispatches back to app state for bidirectional sync.
+
+Request body:
+```json
+{
+  "event": "title_changed",
+  "value": "New Title",
+  "extra": {}
+}
+```
+
+Supported event types: `title_changed`, `xlabel_changed`, `ytitle_changed`, `bar_recolored`, `yrange_changed`
+
+Response: `{"ok": true}`
+
+---
+
+## Section 6: Excel / CSV Layout Conventions
+
+All chart functions read data from Excel (`.xlsx`) or CSV. The `kw` dict always includes `excel_path` and `sheet` (sheet index or name).
+
+### Flat header layout (most column-type charts)
+
+Used by: bar, box, violin, dot_plot, subcolumn_scatter, before_after, repeated_measures, histogram, ecdf, qq_plot, lollipop, waterfall, raincloud, area_chart
+
+```
+Row 0:   Control    Drug A    Drug B      <- group names (strings)
+Row 1:   1.2        2.5       3.1         <- first replicate
+Row 2:   1.5        2.8       3.4
+Row 3:   1.1        2.2       2.9
+```
+
+Validator: `validate_flat_header()`. Minimum 2 columns, minimum 3 rows (including header).
+
+### XY layout (line, scatter, curve_fit, area_chart with numeric X)
+
+```
+Row 0:   X          Series1   Series2     <- X-axis label + series names
+Row 1:   0.0        1.2       2.3         <- first data point
+Row 2:   0.5        1.5       2.6
+Row 3:   1.0        1.8       2.9
+```
+
+Validator: `validate_line()`.
+
+### Grouped two-row header (grouped_bar, stacked_bar)
+
+```
+Row 0:   Control             Drug A                 <- category names
+Row 1:   Male    Female      Male    Female          <- subgroup names
+Row 2:   1.2     2.3         3.4     4.5
+Row 3:   1.5     2.6         3.7     4.8
+```
+
+Read with `pd.read_excel(..., header=[0, 1])` to get a MultiIndex column. Validator: `validate_grouped_bar()`.
+
+### Kaplan-Meier survival
+
+```
+Row 0:   Group A             Group B                <- group name (spans 2 cols each)
+Row 1:   Time    Event       Time    Event           <- "Time" and "Event" headers
+Row 2:   5       1           8       1
+Row 3:   12      0           15      0
+Row 4:   24      1           22      1
+```
+
+Event column: 1 = event occurred, 0 = censored. Validator: `validate_kaplan_meier()`.
+
+### Heatmap
+
+```
+Row 0:   (blank)  ColA   ColB   ColC    <- blank first cell, then column labels
+Row 1:   RowA     1.2    2.3    3.4     <- row label + numeric values
+Row 2:   RowB     4.5    5.6    6.7
+```
+
+Validator: `validate_heatmap()`.
+
+### Two-Way ANOVA (long format)
+
+```
+Row 0:   Factor_A    Factor_B    Value   <- exact header names required
+Row 1:   Control     Male        1.2
+Row 2:   Control     Female      2.3
+Row 3:   Drug        Male        3.4
+Row 4:   Drug        Female      4.5
+```
+
+Validator: `validate_two_way_anova()`.
+
+### Contingency table
+
+```
+Row 0:   (blank)    Outcome1   Outcome2  <- blank first cell, then outcome labels
+Row 1:   Group A    12         8
+Row 2:   Group B    5          15
+```
+
+Validator: `validate_contingency()`.
+
+### Chi-square goodness of fit
+
+```
+Row 0:   Cat1    Cat2    Cat3    <- category names
+Row 1:   25      30      45      <- observed counts
+Row 2:   33      33      34      <- expected counts (optional; defaults to equal)
+```
+
+Validator: `validate_chi_square_gof()`.
+
+### Forest plot
+
+```
+Row 0:   Study    Effect    Lower CI    Upper CI    <- exact header names
+Row 1:   Study A  0.85      0.70        1.02
+Row 2:   Study B  1.12      0.95        1.32
+```
+
+Validator: `validate_forest_plot()`.
+
+### Bland-Altman
+
+```
+Row 0:   Method A    Method B    <- method names
+Row 1:   120         118
+Row 2:   132         130
+Row 3:   125         127
+```
+
+Validator: `validate_bland_altman()`.
+
+### Pyramid chart
+
+```
+Row 0:   Age Group   Males   Females   <- first col = category label header
+Row 1:   0-4         250     235
+Row 2:   5-14        480     460
+```
+
+Validator: `validate_pyramid()`.
+
+---
+
+## Section 7: Stats Engine
+
+All stats computation is in `plotter_functions.py`.
+
+### _run_stats(groups, test_type, n_permutations, control, mc_correction, posthoc, mu0)
+
+Main entry point for significance testing. Returns a list of `(group_a, group_b, p_value, stars)` tuples.
+
+**test_type values:**
+- `"parametric"` — 2 groups: Welch's t-test; 3+ groups: one-way ANOVA + posthoc
+- `"nonparametric"` — 2 groups: Mann-Whitney U; 3+ groups: Kruskal-Wallis + Dunn's posthoc
+- `"paired"` — 2 groups: paired t-test; 3+ groups: pairwise paired t-tests
+- `"permutation"` — permutation test (n_permutations default 9999)
+- `"one_sample"` — compares each group mean to mu0 via one-sample t-test
+
+**posthoc values (parametric, 3+ groups):**
+- `"Tukey HSD"` — Tukey's honest significant difference (default)
+- `"Dunnett (vs control)"` — compare each treatment to one control; uses `scipy.stats.dunnett`
+- `"Bonferroni"` — Welch pairwise with Bonferroni correction
+- `"Sidak"` — Welch pairwise with Sidak correction
+- `"Fisher LSD"` — Welch pairwise uncorrected
+
+**mc_correction values:**
+- `"Holm-Bonferroni"` — default; step-down method
+- `"Bonferroni"` — multiply all p-values by number of tests
+- `"Benjamini-Hochberg (FDR)"` — FDR control
+- `"None (uncorrected)"` — raw p-values
+
+### _calc_error(vals, error_type)
+
+Returns `(mean, half_width)` for error bars.
+- `"sem"` — standard error of the mean
+- `"sd"` — standard deviation
+- `"ci95"` — 95% confidence interval (t-distribution)
+
+### _calc_error_asymmetric(vals, error_type)
+
+Returns `(mean, err_down, err_up)` for log-scale plots. Computes error in log space and maps back to avoid negative lower bars on log axes.
+
+### _p_to_stars(p, threshold=None)
+
+Converts p-value to Prism-style annotation string:
+- `p > threshold` → `"ns"` (hidden unless `__show_ns__=True`)
+- `p <= 0.0001` → `"****"`
+- `p <= 0.001` → `"***"`
+- `p <= 0.01` → `"**"`
+- `p <= threshold` → `"*"`
+
+Uses module-level `__p_sig_threshold__` (default 0.05). App can override this before each plot run.
+
+### _apply_correction(raw_p_list, method)
+
+Applies multiple comparison correction to a list of raw p-values. Returns corrected p-values in the same order. Implements Bonferroni, Holm-Bonferroni, Benjamini-Hochberg FDR.
+
+### normality_warning(groups, stats_test)
+
+Returns a warning string if any group fails the Shapiro-Wilk normality test (p < 0.05) and a parametric test is selected. Returns empty string if no warning needed.
+
+### kwargs that control statistics
+
+Every chart function accepts these kwargs (extracted from the `kw` dict by `PlotTypeConfig.filter_kwargs`):
+- `stats_test: str` — test type ("parametric", "nonparametric", "paired", "permutation", "one_sample")
+- `posthoc: str` — post-hoc method name
+- `mc_correction: str` — multiple comparison correction method
+- `n_permutations: int` — permutations for permutation test
+- `control: str | None` — control group name (for Dunnett and pairwise-vs-control)
+- `show_ns: bool` — show "ns" brackets
+- `show_brackets: bool` — show significance brackets at all
+- `p_threshold: float` — significance cutoff (default 0.05)
+- `error: str` — error bar type ("sem", "sd", "ci95")
+
+---
+
+## Section 8: Adding a New Chart Type — 5-Step Checklist
+
+### Step 1 — Write the matplotlib function in `plotter_functions.py`
+
+Insert before the `# P20 — Export all chart types` block. Every function must follow this template:
 
 ```python
-def prism_my_chart(
+def plotter_my_chart(
     excel_path: str,
     sheet=0,
     color=None,
@@ -152,7 +604,7 @@ def prism_my_chart(
     # ... chart-specific params ...
     ref_line=None,
     ref_line_label: str = "",
-    # ── shared style params (copy this block verbatim) ──────────────────
+    # -- shared style params (copy verbatim) ---------------------------------
     axis_style: str = "open",
     tick_dir: str = "out",
     minor_ticks: bool = False,
@@ -166,18 +618,15 @@ def prism_my_chart(
     gridlines: bool = False,
     grid_style: str = "none",
 ):
-    """One-line summary.
-
-    Longer description. Excel layout explanation.
-    """
+    """One-line summary."""
     _ensure_imports()
     group_order, groups, bar_colors, fig, ax = _base_plot_setup(
         excel_path, sheet, color, None, figsize)
-    _sk = _style_kwargs(locals())   # ← always do this
+    _sk = _style_kwargs(locals())   # call immediately after _base_plot_setup
 
     # ... drawing code ...
 
-    _apply_prism_style(ax, font_size, **_sk)
+    _apply_plotter_style(ax, font_size, **_sk)
     _apply_grid(ax, grid_style, gridlines)
     _base_plot_finish(ax, fig, title, xlabel, ytitle, yscale, ylim,
                       font_size, ref_line, len(group_order),
@@ -185,408 +634,251 @@ def prism_my_chart(
     return fig, ax
 ```
 
-**Critical rules:**
-- Always call `_ensure_imports()` first
-- Always call `_style_kwargs(locals())` early and pass `**_sk` to both `_apply_prism_style` and `_base_plot_finish`
+Critical rules:
+- `_ensure_imports()` must be the very first call
+- `_style_kwargs(locals())` must be called immediately after `_base_plot_setup()`, before any code that modifies `locals()`
 - Always `return fig, ax`
-- Never import matplotlib or seaborn at module level — they're lazy-loaded by `_ensure_imports()`
+- Never import matplotlib at module level
 
-### Step 2 — Register it in `plotter_registry.py`
-
-Add a new `PlotTypeConfig(...)` entry to the registry list in `plotter_registry.py`.
-Also add a sidebar icon drawing function to `plotter_app_icons.py`.
+### Step 2 — Add PlotTypeConfig to `plotter_registry.py`
 
 ```python
 PlotTypeConfig(
-    key="my_chart",           # internal key — used everywhere
-    label="My Chart",         # shown in sidebar
-    fn_name="plotter_my_chart", # must match the function name exactly
-    tab_mode="bar",           # which UI tabs to use (see tab modes below)
-    stats_tab="standard",     # which stats sub-tab
-    validate="_validate_bar", # which validator method
-    has_points=True,          # show point size/alpha sliders?
-    has_error_bars=True,      # show error bar type selector?
-    has_legend=False,         # show legend position selector?
-    has_stats=True,           # show statistics tab?
-    x_continuous=False,       # X axis is numeric (not categorical)?
-    axes_has_bar_width=False, # show bar width slider?
-    axes_has_line_opts=False, # show line width/marker options?
+    key="my_chart",
+    label="My Chart",
+    fn_name="plotter_my_chart",
+    tab_mode="bar",           # "bar" | "line" | "grouped_bar" | "scatter" | "heatmap" | "kaplan_meier" | "before_after"
+    stats_tab="standard",     # see full list in registry file
+    validate="_validate_bar", # validator method name on App class
+    has_points=True,
+    has_error_bars=True,
+    has_legend=False,
+    has_stats=True,
+    x_continuous=False,
+    axes_has_bar_width=False,
+    axes_has_line_opts=False,
     extra_collect=lambda app, kw: kw.update({
         "my_param": app._get_var("my_var_key", default_value),
     }),
 ),
 ```
 
-**tab_mode options** (controls which UI sub-sections appear):
-- `"bar"` — flat categorical data (bar, box, violin, dot_plot, etc.)
-- `"line"` — numeric X axis (line, scatter, curve_fit)
-- `"grouped_bar"` — two-row-header grouped data
-- `"scatter"` — XY scatter variants
-- `"heatmap"` — matrix data
-- `"kaplan_meier"` — survival data
-- `"before_after"` — paired/repeated measures
+### Step 3 — Add Plotly spec builder (if this is a priority chart type)
 
-**stats_tab options**: `"standard"` `"grouped_bar"` `"scatter"` `"kaplan_meier"` `"before_after"` `"histogram"` `"curve_fit"` `"column_stats"` `"contingency"` `"repeated_measures"` `"chi_square_gof"` `"stacked_bar"` `"bubble"` `"dot_plot"` `"bland_altman"` `"forest_plot"` `"heatmap"` `"two_way_anova"`
-
-### Step 3 — Add UI controls (if the chart has unique options)
-
-If your chart needs custom UI controls not covered by the standard tabs,
-add a `_tab_stats_my_chart` method to the App class (see `_tab_stats_histogram`
-at line ~5143 for a template) and set `stats_tab="my_chart"` in the registry.
-
-Add new `tk.StringVar` / `tk.BooleanVar` defaults to `_reset_vars_to_defaults()`
-so the form resets correctly when switching chart types.
-
-### Step 4 — Add a validator in `plotter_validators.py`
+Create `plotter_spec_my_chart.py`:
 
 ```python
-def validate_my_chart(df) -> tuple[list, list]:
-    """Validate My Chart layout: row 0 = headers, rows 1+ = values."""
-    errors, warnings = [], []
-    # ... checks ...
-    return errors, warnings
+"""Plotly spec builder for My Chart."""
+
+import json
+import pandas as pd
+from plotter_plotly_theme import PRISM_TEMPLATE, PRISM_PALETTE
+
+def build_my_chart_spec(kw: dict) -> str:
+    import plotly.graph_objects as go
+    # ... read Excel, build traces, return fig.to_json()
 ```
 
-Then wire it in `plotter_barplot_app.py`:
-- Import it in the `from plotter_validators import ...` block at the top
-- Add it to `_STANDALONE_VALIDATORS` dict in `_validate_spreadsheet()`
-- Update `PlotTypeConfig.validate` to `"_validate_my_chart"`
+Then wire into `plotter_server._build_spec()`:
+```python
+elif chart_type == "my_chart":
+    from plotter_spec_my_chart import build_my_chart_spec
+    return build_my_chart_spec(kw)
+```
+
+### Step 4 — Update `/chart-types` metadata in `plotter_server.py`
+
+The `/chart-types` endpoint reads from the registry. If your chart is in the registry, it should appear automatically. Confirm by checking the endpoint implementation.
 
 ### Step 5 — Write tests
 
-Add a test section to `test_comprehensive.py` following the existing pattern.
-At minimum: one test that renders without crashing, one that checks a specific
-visual property, one that tests the validator.
+Add tests to `tests/test_comprehensive.py` (chart function) and optionally `tests/test_specs.py` (if Plotly spec) and `tests/test_api.py` (if new endpoint).
 
-Run `python3 run_all.py` — all existing 438 tests must still pass.
+Minimum test coverage:
+1. Renders without crashing with valid data
+2. Returns correct number of groups/traces
+3. Validator rejects malformed data
 
----
-
-## Core helper functions (use these, don't reinvent them)
-
-### In `plotter_functions.py`
-
-| Function | Purpose |
-|---|---|
-| `_ensure_imports()` | Loads plt, sns, stats lazily — always call first |
-| `_base_plot_setup(excel_path, sheet, color, n, figsize)` | Reads Excel, assigns colours, creates fig/ax |
-| `_base_plot_finish(ax, fig, ...)` | Applies labels, ref line, tight_layout |
-| `_style_kwargs(locals())` | Extracts shared style params from locals() dict |
-| `_apply_prism_style(ax, font_size, **_sk)` | Applies open-spine, tick direction, fonts |
-| `_apply_stats_brackets(ax, groups, ...)` | Draws significance brackets |
-| `_apply_grid(ax, grid_style, gridlines)` | Horizontal / full / no gridlines |
-| `_apply_legend(ax, legend_pos, font_size)` | Places or hides legend |
-| `_apply_log_formatting(ax)` | Log tick labels (10¹, 10², ...) |
-| `_set_categorical_xticks(ax, ...)` | Group labels + n= counts on X axis |
-| `_draw_jitter_points(ax, g_idx, vals, color, ...)` | Jittered data points |
-| `_calc_error(vals, error_type)` | Returns (mean, half_width) for SEM/SD/CI95 |
-| `_calc_error_asymmetric(vals, error_type)` | Asymmetric error bars for log scale |
-| `_assign_colors(n, color)` | Returns list of n hex colours from palette |
-| `_darken_color(c, factor=0.65)` | Darker version for edges |
-| `_fmt_bar_label(v)` | Format a numeric value for bar top labels |
-| `normality_warning(groups, stats_test)` | Returns warning string if non-normal |
-
-### In `plotter_widgets.py`
-
-| Symbol | Purpose |
-|---|---|
-| `_DS.PRIMARY` | Accent blue `#2274A5` |
-| `PButton(parent, text, style, command)` | Styled button: `"primary"/"secondary"/"ghost"` |
-| `PEntry(parent, textvariable, width)` | Flat-border text entry |
-| `PCheckbox(parent, variable, text)` | Canvas-rendered checkbox |
-| `PCombobox(parent, textvariable, values)` | Styled dropdown |
-| `section_sep(parent, row, text)` | Blue section header band in grid layouts |
-| `_create_tooltip(widget, text)` | Hover tooltip (yellow background) |
-| `add_placeholder(entry, var, text)` | Grey hint text when empty |
-| `label(key)` / `hint(key)` | LABELS/HINTS dict lookup |
-
-### In `plotter_canvas_renderer.py`
-
-| Class | Purpose |
-|---|---|
-| `BarScene` | Immutable bar chart description |
-| `CanvasRenderer` | Renders BarScene on tk.Canvas; `render()`, `hit_test()`, `recolor()`, `rescale()` |
-| `RescaleHandle` | Coordinate mapping; `set_y_range()`, `set_canvas_size()`, `set_bar_width()` |
-| `GroupedBarScene` | Immutable grouped bar description |
-| `GroupedCanvasRenderer` | Renderer for grouped charts |
-| `build_bar_scene(kw, w, h)` | Builds BarScene from plot kwargs (no matplotlib) |
-| `build_grouped_bar_scene(kw, w, h)` | Builds GroupedBarScene |
-
----
-
-## Style constants (all in `plotter_functions.py`)
-
+Pattern:
 ```python
-_DPI        = 144       # render DPI (144 = retina-grade)
-_FONT       = "Arial"   # axis/tick font (falls back on non-macOS)
-_ALPHA_BAR  = 0.85      # default bar fill alpha
-_LABEL_PAD  = 6         # axis label padding (pts)
-_TITLE_PAD  = 8         # title padding (pts)
-_TIGHT_PAD  = 1.2       # fig.tight_layout pad
-
-PRISM_PALETTE = [        # 10 default colours matching GraphPad Prism
-    "#E8453C", "#2274A5", "#32936F", "#F18F01", "#A846A0",
-    "#6B4226", "#048A81", "#D4AC0D", "#3B1F2B", "#44BBA4",
-]
-
-AXIS_STYLES = {
-    "Open (Prism default)": "open",   # left + bottom spines only
-    "Closed box":           "closed", # all four spines
-    "Floating":             "floating",
-    "None":                 "none",
-}
-
-TICK_DIRS = {"Outward (default)": "out", "Inward": "in", "Both": "inout", "None": ""}
+def test_my_chart_renders():
+    with bar_excel({"Control": [1,2,3], "Drug": [4,5,6]}) as path:
+        fig, ax = pf.plotter_my_chart(path)
+        assert fig is not None
+        plt.close(fig)
+run("plotter_my_chart: renders without crash", test_my_chart_renders)
 ```
 
-All shared style params (axis_style, tick_dir, fig_bg, etc.) live in
-`PLOT_PARAM_DEFAULTS` and are extracted by `_style_kwargs(locals())`.
-**If you add a new universal style param, add it to `PLOT_PARAM_DEFAULTS` — that
-is the single change needed.**
+---
+
+## Section 9: Development Commands
+
+```bash
+# Run the full test suite
+python3 run_all.py
+
+# Run a single suite
+python3 run_all.py comprehensive     # chart function tests
+python3 run_all.py control           # control-group logic tests
+python3 run_all.py stats_verify      # statistical correctness tests
+python3 run_all.py phase3_plotly     # Plotly spec builder tests
+
+# Start web server (dev mode — no pywebview, browser access)
+python3 plotter_web_server.py
+# Open http://localhost:7331
+
+# Build React SPA
+cd plotter_web && npm install && npm run build && cd ..
+
+# Launch desktop app (requires macOS + pywebview)
+python3 plotter_webview.py
+
+# Syntax check all Python modules
+python3 -c "import plotter_functions, plotter_validators, plotter_results, plotter_registry, plotter_plotly_theme, plotter_spec_bar, plotter_spec_grouped_bar, plotter_spec_line, plotter_spec_scatter, plotter_widgets, plotter_wiki_content, plotter_import_pzfx, plotter_project, plotter_tabs, plotter_session, plotter_events, plotter_types, plotter_undo, plotter_errors, plotter_comparisons, plotter_presets, plotter_app_icons; print('OK')"
+
+# Docker deployment
+docker build -t spectra .
+docker run -p 7331:7331 spectra
+
+# PyInstaller packaging (not yet implemented)
+# pyinstaller --onefile --windowed plotter_webview.py
+```
 
 ---
 
-## Excel layout conventions
+## Section 10: Known Issues and Gotchas
 
-| Chart type | Row 0 | Row 1 | Rows 2+ |
-|---|---|---|---|
-| Bar, Box, Violin, Dot, Before/After, Histogram | Group names | — | Numeric values |
-| Line, Scatter, Curve Fit | X-label, Series names | — | X value, Y replicates |
-| Grouped Bar, Stacked Bar | Category names | Subgroup names | Numeric values |
-| Kaplan-Meier | Group names (each spans 2 cols) | "Time", "Event" | time, 0/1 |
-| Heatmap | blank, Col labels | — | Row label, numeric values |
-| Two-Way ANOVA | `Factor_A`, `Factor_B`, `Value` | — | one row per observation |
-| Contingency | blank, Outcome labels | — | Group name, counts |
-| Chi-Square GoF | Category names | Observed counts | (optional) Expected |
-| Forest Plot | Study, Effect, Lower CI, Upper CI | — | one row per study |
-| Bland-Altman | Method A, Method B | — | paired measurements |
-| Pyramid | Category, Left series, Right series | — | values |
+1. **`_ensure_imports()` must be first** — matplotlib is `None` at module load. Calling `plt.subplots()` before `_ensure_imports()` raises `TypeError: 'NoneType' is not callable`.
 
----
+2. **`_style_kwargs(locals())`** must be called after all parameters are defined but before any code that modifies `locals()`. Call it immediately after `_base_plot_setup()`.
 
-## All 29 chart types
+3. **Docstring indentation after multi-line signatures** — place the docstring after the closing `):`, never between parameter lines.
 
-| UI Label | Registry key | Function |
-|---|---|---|
-| Bar Chart | `bar` | `plotter_barplot` |
-| Line Graph | `line` | `plotter_linegraph` |
-| Grouped Bar | `grouped_bar` | `plotter_grouped_barplot` |
-| Box Plot | `box` | `prism_boxplot` |
-| Scatter Plot | `scatter` | `prism_scatterplot` |
-| Violin Plot | `violin` | `prism_violin` |
-| Survival Curve | `kaplan_meier` | `prism_kaplan_meier` |
-| Heatmap | `heatmap` | `prism_heatmap` |
-| Two-Way ANOVA | `two_way_anova` | `prism_two_way_anova` |
-| Before / After | `before_after` | `prism_before_after` |
-| Histogram | `histogram` | `prism_histogram` |
-| Subcolumn | `subcolumn_scatter` | `prism_subcolumn_scatter` |
-| Curve Fit | `curve_fit` | `prism_curve_fit` |
-| Col Statistics | `column_stats` | `prism_column_stats` |
-| Contingency | `contingency` | `prism_contingency` |
-| Repeated Meas. | `repeated_measures` | `prism_repeated_measures` |
-| Chi-Sq GoF | `chi_square_gof` | `prism_chi_square_gof` |
-| Stacked Bar | `stacked_bar` | `prism_stacked_bar` |
-| Bubble Chart | `bubble` | `prism_bubble` |
-| Dot Plot | `dot_plot` | `prism_dot_plot` |
-| Bland-Altman | `bland_altman` | `prism_bland_altman` |
-| Forest Plot | `forest_plot` | `prism_forest_plot` |
-| Area Chart | *(not yet in registry)* | `prism_area_chart` |
-| Raincloud | *(not yet in registry)* | `prism_raincloud` |
-| Q-Q Plot | *(not yet in registry)* | `prism_qq_plot` |
-| Lollipop | *(not yet in registry)* | `prism_lollipop` |
-| Waterfall | *(not yet in registry)* | `prism_waterfall` |
-| Pyramid | *(not yet in registry)* | `prism_pyramid` |
-| ECDF | *(not yet in registry)* | `prism_ecdf` |
+4. **`plotter_results.py` for grouped charts** — `df.select_dtypes(include="number")` merges the two-row-header grouped layout incorrectly. Results panel shows all numeric cells combined for grouped/stacked charts. Known cosmetic issue.
+
+5. **pywebview on headless servers** — pywebview requires a display. Use `plotter_web_server.py` (no Tk, no pywebview) for headless or server deployment.
+
+6. **React SPA build** — Run `cd plotter_web && npm install && npm run build` before deployment. The `dist/` directory must exist for static file serving. FastAPI serves it at `/`.
+
+7. **CORS** — FastAPI allows all origins by default. In production, restrict `allow_origins` in `plotter_server.py` to your domain.
+
+8. **API key auth** — Set `PLOTTER_API_KEY` env var for non-local request authentication. Local requests (`127.0.0.1`/`localhost`) always bypass auth.
+
+9. **test_canvas_renderer.py** — The canvas renderer module was removed. This test suite runs 0 tests (vacuous pass). Agent D will delete it.
+
+10. **test_modular.py** — Tests for Tk widgets and tabs. Being retired by Agent D as the Tk app is superseded.
+
+11. **`plotter_registry.py` is canonical** — Never add new chart types directly to `plotter_barplot_app.py`. All chart type definitions live in the registry.
+
+12. **All new Python modules use `plotter_` prefix** — Never create modules with `prism_` prefix. Comments may say "GraphPad Prism" (that's the product being emulated) but Python identifiers use `plotter_`.
+
+13. **`.cplot` files are ZIP archives** — contain `settings.json` + the original Excel. Do not assume plain JSON.
+
+14. **ttk.Treeview heading colours on macOS Aqua** — `ttk.Style.configure` heading background is ignored. Fix requires `style.theme_use("clam")`. Not planned for React port.
+
+15. **Phase 3 Plotly tests** — `test_phase3_plotly.py` has 9 failures when `plotly` is not installed. Install plotly first: `pip install plotly`.
+
+16. **pingouin compatibility** — `prism_repeated_measures` had a `KeyError: 'p-unc'` bug (pingouin >= 0.5 uses `p_unc` with underscore). Fixed in Phase 2 with version-safe column lookup.
+
+17. **`plotter_barplot_app.py` is spec only** — Do not maintain this file. Do not fix Tk bugs in it. The React UI replaces it. Read it to understand what controls the React UI needs.
+
+18. **Multi-tab UI** — Deferred. The `TabState`/`TabManager`/`TabBar` infrastructure in `plotter_tabs.py` exists but is not wired into the React app. One chart at a time.
+
+19. **`build_bar_spec` SEM calculation** — Current implementation computes population std then divides by sqrt(n). This matches the matplotlib implementation but uses pure Python (no numpy) for portability.
+
+20. **`plotter_web_server.py`** — This is the standalone web server entry point (no Tk, no pywebview). Use this for headless/server deployment. The desktop entry point is `plotter_webview.py`.
 
 ---
 
-## Test harness patterns
+## Section 11: Test Suite
+
+Current suites registered in `run_all.py`:
+
+| Suite key | File | Tests | Status | What it tests |
+|---|---|---|---|---|
+| `comprehensive` | `tests/test_comprehensive.py` | ~309 | Keep | All 29 matplotlib chart functions; stats engine |
+| `p1p2p3` | `tests/test_p1_p2_p3.py` | ~80 | Delete (Agent D) | Style parameter regressions (overlapping with comprehensive) |
+| `control` | `tests/test_control.py` | 20 | Keep | Control-group statistical logic |
+| `canvas_renderer` | `tests/test_canvas_renderer.py` | 0 | Delete (Agent D) | Canvas renderer (module missing; vacuous) |
+| `modular` | `tests/test_modular.py` | ~74 | Delete (Agent D) | Tk widgets and tabs (Tk retired) |
+| `stats_verify` | `tests/test_stats_verification.py` | 37 | Keep | Statistical correctness |
+| `phase3_plotly` | `tests/test_phase3_plotly.py` | 11 (9 fail without plotly) | Fix (Agent D) | Plotly spec builders |
+
+Target after Agent D cleanup: ~200 tests across 6 suites in ~30 seconds.
+
+New suites to add (Agent D):
+- `tests/test_api.py` — FastAPI endpoint tests
+- `tests/test_validators.py` — validator logic tests (extracted from test_modular)
+- `tests/test_specs.py` — Plotly spec builder tests (expanded)
+
+### When to add tests
+
+- Every new chart function: minimum 3 tests in `test_comprehensive.py`
+- Every new Plotly spec builder: tests in `tests/test_specs.py`
+- Every new FastAPI endpoint: tests in `tests/test_api.py`
+- Every new validator: tests in `tests/test_validators.py`
+
+### Test harness patterns
 
 ```python
-# All test files follow this pattern:
 import plotter_test_harness as _h
 from plotter_test_harness import pf, plt, ok, fail, run, section, summarise, bar_excel, with_excel
 
-# Write a test:
-def test_my_feature():
+def test_my_chart():
     with bar_excel({"Control": [1,2,3], "Drug": [4,5,6]}) as path:
-        fig, ax = pf.plotter_barplot(path)
+        fig, ax = pf.plotter_my_chart(path)
         assert ax.get_xlim()[0] < 0
         plt.close(fig)
-run("plotter_barplot: x axis extends left of first bar", test_my_feature)
+run("plotter_my_chart: x axis extends left", test_my_chart)
 
-# Run standalone:
 summarise()
-sys.exit(0 if _h.FAIL == 0 else 1)
 ```
 
-**Available fixtures**: `bar_excel`, `line_excel`, `grouped_excel`, `km_excel`,
-`heatmap_excel`, `two_way_excel`, `contingency_excel`, `with_excel`
+Available fixtures: `bar_excel`, `line_excel`, `grouped_excel`, `km_excel`, `heatmap_excel`, `two_way_excel`, `contingency_excel`, `with_excel`
 
 ---
 
-## Known gotchas
+## Section 12: Design Decisions and Reasoning
 
-1. **`_ensure_imports()` must be first** in every chart function. matplotlib is
-   `None` at module load time. Calling `plt.subplots()` before `_ensure_imports()`
-   raises `TypeError: 'NoneType' is not callable`.
+From `docs/PLAN.md`:
 
-2. **`_style_kwargs(locals())`** must be called *after all parameters are defined*
-   but *before* any code that modifies locals(). Call it immediately after
-   `_base_plot_setup()`.
+**Why pywebview over Electron?**
+pywebview uses the native macOS WKWebView — no Chromium to bundle, smaller app size, authentic OS integration. Electron adds ~150MB+ to the app bundle. pywebview adds ~1MB.
 
-3. **Docstring indentation after multi-line signatures** — if you add a docstring
-   to a function with multi-line parameters, place the docstring *after the closing
-   `):`*, never between parameter lines. The regex-based docstring insertion in
-   session 13 accidentally broke this; it was fixed with a de-indent pass.
+**Why Plotly for 4 types, matplotlib PNG for 25?**
+Plotly provides interactive charts (pan, zoom, editable labels, hover tooltips) that feel native in a desktop app. Writing full Plotly spec builders for all 29 chart types is a major engineering effort. The PNG fallback lets us ship a working app for all 29 types immediately while migrating incrementally. The Plotly path is the future; the PNG path is the present for the 25 remaining types.
 
-4. **Canvas-mode and `_canvas_widget`** — in canvas mode `self._canvas_widget`
-   is `None`. Never call `self._canvas_widget.get_tk_widget()` without first
-   checking `if self._canvas_widget is not None`.
+**Why React for the UI instead of keeping Tkinter?**
+Tkinter is limited — no CSS, no animation, no responsive layout, no npm ecosystem. The app needs a professional UI that matches GraphPad Prism's polish. React + Vite + TypeScript is the correct tool for a complex, stateful, data-driven UI. The Tk app proved the UX requirements; React delivers them.
 
-5. **`_bar_renderer` lifetime** — cleared to `None` before each new render.
-   Check for `None` before using.
+**Why is the FastAPI server stateless?**
+React owns all UI state. Each `/render` call is self-contained — it contains everything needed to reproduce the chart. This makes the server simple, testable, and horizontally scalable. The server holds no session, no chart state, no file handles.
 
-6. **New chart types added to `plotter_functions.py` but NOT yet to registry**
-   (area_chart, raincloud, qq_plot, lollipop, waterfall, pyramid, ecdf) —
-   these functions exist and are tested in `test_comprehensive.py` but do not
-   appear in the app sidebar yet. To add them to the UI, follow Step 2 above.
+**Why hybrid rendering (Plotly + PNG) instead of pure Plotly?**
+The matplotlib 29 chart functions are tested, correct, mature. Rewriting all 29 in Plotly would require months and introduce new bugs. The hybrid approach preserves the matplotlib implementations as the source of truth while delivering interactive charts for the highest-value types immediately.
 
-7. **`ttk.Treeview` heading colours on macOS Aqua theme** — `ttk.Style.configure`
-   heading background is ignored on Aqua. Headers appear in the system default
-   colour. Fix requires `style.theme_use("clam")` or custom drawing.
+**Stats in Python, not JavaScript?**
+Python has `scipy`, `pingouin`, `statsmodels`. JavaScript statistical libraries are not as mature or well-tested. All computation — data loading, stats, chart building — stays in Python. JavaScript only renders.
 
-8. **`_populate_results` for grouped charts** reads `df.select_dtypes(include="number")`
-   which merges the two-row-header grouped layout incorrectly. Results panel
-   shows all numeric cells combined for grouped/stacked charts — known issue.
+---
 
-9. **Toggling canvas mode while viewing a grouped chart** — `_toggle_canvas_mode`
-   checks `plot_type == "bar"` before re-triggering a run. Should be
-   `in ("bar", "grouped_bar")`. Known bug, not yet fixed.
+## One rule before every commit
 
-10. **The `_kw_snap` deep-copy** in `_do_run` is taken *after* `spec.filter_kwargs`
-    strips unsupported keys. `build_bar_scene` reads `kw["excel_path"]` so the
-    path must survive the filter. It always does for bar/grouped_bar, but check
-    if adding a new chart type with unusual kwargs.
+```bash
+python3 run_all.py   # must print 0 failures
+```
+
+Never commit if this fails. Never skip it. If tests regress, fix them before doing anything else.
 
 ---
 
 ## Commit conventions
 
 ```
-feat: add lollipop chart and wire into sidebar
-fix: correct y-axis drag clamping for zero-mean data
-test: add 8 ECDF validator tests
-refactor: extract prism_export.py from barplot_app
+feat: add lollipop chart Plotly spec builder
+fix: correct asymmetric error bar calculation for log scale
+test: add 8 forest plot validator tests
+refactor: extract plotter_export.py from plotter_server
 docs: update CLAUDE.md with pyramid chart layout
+chore: move phase2/ to docs/archive/
 ```
-
-Always run `python3 run_all.py` and confirm 0 failures before pushing.
-
----
-
-## Phase 2 Changes (March 2026)
-
-Phase 2 added 14 new modules and significant new features while maintaining full
-backward compatibility. All 438 tests pass.
-
-### New infrastructure modules
-
-| Module | Purpose |
-|---|---|
-| `plotter_registry.py` | `PlotTypeConfig` registry extracted from `plotter_barplot_app.py` |
-| `plotter_tabs.py` | Multi-tab state management: `TabState`, `TabManager`, `TabBar` |
-| `plotter_app_icons.py` | Sidebar icon drawing for all 29 chart types |
-| `plotter_presets.py` | Style preset system: load/save named presets as `.json` |
-| `plotter_session.py` | Session persistence: auto-save and restore last-used settings |
-| `plotter_events.py` | `EventBus` for decoupled pub/sub messaging between components |
-| `plotter_types.py` | Shared dataclasses and type definitions |
-| `plotter_undo.py` | `UndoStack` implementing undo/redo for plot parameter changes |
-| `plotter_errors.py` | `ErrorReporter` for structured, user-friendly error messages |
-| `plotter_comparisons.py` | Custom comparison builder: select arbitrary group pairs for stats |
-| `plotter_project.py` | `.cplot` project file save/open (ZIP archives with data + settings) |
-| `plotter_import_pzfx.py` | GraphPad Prism `.pzfx` file importer |
-| `plotter_wiki_content.py` | Statistical wiki content: 29 sections, 21 references |
-| `plotter_app_wiki.py` | Statistical wiki popup viewer (Tk UI) |
-
-### New features wired into the app
-
-- **Style presets**: preset selector in Data tab; ships with 5 built-in presets
-- **Session persistence**: settings auto-saved on plot run, restored at startup
-- **Project files**: File > Save Project / Open Project (.cplot ZIP format)
-- **.pzfx import**: File > Import from GraphPad (.pzfx) to extract group data
-- **Statistical wiki**: Help > Statistical Methods (29 documented tests)
-- **Undo/redo**: Cmd+Z / Cmd+Shift+Z for plot parameter changes
-- **Keyboard shortcuts**: Cmd+1-9 to switch chart types in the sidebar
-- **Event bus**: internal pub/sub wiring (not yet widely used by UI components)
-- **Custom comparisons**: UI for selecting specific group pairs to test
-
-### Bugs fixed
-
-1. `plotter_repeated_measures`: `KeyError: 'p-unc'` — pingouin >=0.5 uses `p_unc`
-   (underscore) not `p-unc` (hyphen). Fixed with version-safe column lookup.
-
-### Additional gotchas (Phase 2)
-
-11. **Headless / CI environments** — `plotter_tabs.py` and other Tk modules
-    need a display. Run `xvfb-run python3 run_all.py` on CI. Without `$DISPLAY`
-    the modular test suite will show ~19 Tk-related failures (all expected).
-
-12. **All new modules use `plotter_` prefix** — never create new modules with
-    `prism_` prefix. Comments and docstrings may still say "GraphPad Prism"
-    (that's the product being emulated) but Python identifiers use `plotter_`.
-
-13. **Event bus is optional** — components don't need to use `EventBus`. It is
-    wired in but not required for rendering or stats.
-
-14. **`.cplot` files are ZIP archives** — they contain `settings.json` +
-    the original Excel file. Do not assume plain JSON.
-
-15. **`plotter_registry.py` is the canonical source** for `PlotTypeConfig` entries.
-    `plotter_barplot_app.py` imports the registry; do not add new chart types
-    directly to `plotter_barplot_app.py`.
-
-## Phase 4 — Deployment Readiness
-
-### New files
-| File | Purpose |
-|---|---|
-| `plotter_web_server.py` | Standalone web server entry point (no Tk) |
-| `Dockerfile` | Docker deployment config |
-| `requirements.txt` | Desktop dependencies |
-| `requirements-web.txt` | Web server dependencies (no Tk/matplotlib) |
-| `plotter_web/` | React SPA (Vite + TypeScript + Plotly.js) |
-
-### Running as a web service
-```bash
-# Local development
-python3 plotter_web_server.py
-
-# With Docker
-docker build -t claude-plotter .
-docker run -p 7331:7331 claude-plotter
-
-# With API key authentication
-PLOTTER_API_KEY=your-secret python3 plotter_web_server.py
-```
-
-### Architecture
-```
-Desktop mode:   Tk shell -> pywebview -> React SPA -> FastAPI (127.0.0.1:7331)
-Web mode:       Browser -> React SPA -> FastAPI (0.0.0.0:7331)
-Both modes:     same Python business logic, same FastAPI server
-```
-
-### Phase 4 gotchas
-
-16. **pywebview on headless servers** — pywebview requires a display.
-    Use `plotter_web_server.py` (no Tk, no pywebview) for headless deployment.
-
-17. **React SPA build** — Run `cd plotter_web && npm install && npm run build`
-    before deployment. The dist/ directory must exist for static file serving.
-
-18. **CORS** — FastAPI allows all origins by default. In production, restrict
-    `allow_origins` in plotter_server.py to your domain.
-
-19. **API key** — Set `PLOTTER_API_KEY` env var for non-local request auth.
-    Local requests (127.0.0.1 / localhost) always bypass auth.

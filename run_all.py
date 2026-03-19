@@ -3,13 +3,13 @@ run_all.py
 ==========
 Unified test runner for all Claude Plotter test suites.
 
-Runs all three suites in a single Python process sharing the already-loaded
+Runs all suites in a single Python process sharing the already-loaded
 plotter_functions module (saves ~3–5 s vs running each file separately).
 
 Usage:
     python3 run_all.py                  # run all suites
     python3 run_all.py comprehensive    # one suite only
-    python3 run_all.py p1p2p3 control  # two suites
+    python3 run_all.py stats validators # two suites
 """
 
 import sys, os, time, importlib, argparse
@@ -23,13 +23,11 @@ import plotter_test_harness as _h   # pre-loads pf + matplotlib once
 LINE = "━" * 64
 
 SUITES = {
-    "comprehensive":   "test_comprehensive",
-    "p1p2p3":          "test_p1_p2_p3",
-    "control":         "test_control",
-    "canvas_renderer": "test_canvas_renderer",
-    "modular":         "test_modular",
-    "stats_verify":    "test_stats_verification",
-    "phase3_plotly":   "test_phase3_plotly",
+    "comprehensive": "test_comprehensive",   # 309 tests — chart functions
+    "stats":         "test_stats",           # merged stats + control tests
+    "validators":    "test_validators",      # validator tests
+    "specs":         "test_phase3_plotly",   # Plotly spec builders
+    "api":           "test_api",             # FastAPI endpoint tests
 }
 
 
@@ -67,9 +65,8 @@ def run_suite(module_name: str, label: str) -> tuple[int, int, list]:
 def main():
     parser = argparse.ArgumentParser(description="Claude Plotter unified test runner")
     parser.add_argument("suites", nargs="*",
-                        help="Suite name(s): comprehensive / p1p2p3 / control / "
-                             "canvas_renderer / modular / stats_verify "
-                             "(default: all)")
+                        help="Suite name(s): comprehensive / stats / validators / "
+                             "specs / api  (default: all)")
     args = parser.parse_args()
 
     requested = args.suites if args.suites else list(SUITES.keys())

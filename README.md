@@ -1,248 +1,129 @@
-# Claude Plotter
+# Spectra
 
-> A GraphPad Prism-style scientific plotting application — built entirely by Claude (Anthropic) with Ashwin Pasupathy.
+A GraphPad Prism-style scientific plotting desktop application for macOS. Load your data from an Excel spreadsheet, choose from 29 chart types, configure statistics, and generate publication-quality figures — all without writing code.
 
-![Tests](https://img.shields.io/badge/tests-531%20passing-brightgreen)
-![Python](https://img.shields.io/badge/python-3.12-blue)
-![Charts](https://img.shields.io/badge/chart%20types-29-orange)
-![Status](https://img.shields.io/badge/status-active-success)
+Spectra runs as a native macOS window (pywebview + WKWebView) backed by a React UI and a local FastAPI server. No terminal, no browser, no ports visible to the user.
 
 ---
 
-## Overview
+## Requirements
 
-Claude Plotter is a fully-featured application that brings the familiar workflow of GraphPad Prism to your desktop or browser. Load your data from an Excel spreadsheet, choose a chart type, tweak your style parameters, and generate publication-quality figures — all without writing a single line of code.
-
-The application runs in two modes:
-- **Desktop**: Python + Tkinter UI with a pywebview panel for interactive Plotly charts
-- **Web**: React SPA + FastAPI backend, deployable anywhere (Docker, cloud, etc.)
-
-Both modes share the same Python business logic and FastAPI server.
+- Python 3.11+
+- macOS (for desktop app; web server mode works on Linux/Windows)
+- Node.js 18+ (for building the frontend)
 
 ---
 
 ## Quick Start
 
 ```bash
-# Desktop (requires display)
+# Install Python dependencies
 pip install -r requirements.txt
-python3 plotter_barplot_app.py
 
-# Web server (no display required)
-pip install -r requirements-web.txt
-python3 plotter_web_server.py
-# Open http://localhost:7331
+# Build the React frontend
+cd plotter_web && npm install && npm run build && cd ..
 
-# Docker
-docker build -t claude-plotter .
-docker run -p 7331:7331 claude-plotter
+# Launch the desktop app
+python3 plotter_webview.py
 ```
 
----
-
-## Features
-
-- **29 chart types** — from simple bar charts to Kaplan-Meier survival curves and forest plots
-- **Plotly.js interactive charts** — bar, grouped bar, line, and scatter render via Plotly with editable titles and axes
-- **FastAPI backend** — runs as desktop app or standalone web service
-- **React SPA frontend** — Vite + TypeScript + Plotly.js
-- **Docker deployment** — single Dockerfile for production web deployment
-- **Live canvas renderer** — bar and grouped-bar charts render natively on `tk.Canvas` with interactive hit-testing, recolouring, and Y-axis drag
-- **Publication-ready output** — 144 DPI renders, open/closed/floating spine styles, configurable tick directions, gridlines, and font sizes
-- **Statistical overlays** — significance brackets, error bars (SEM, SD, 95% CI), jitter points, and posthoc corrections
-- **Excel-native data model** — paste data directly from Prism, Excel, or Numbers; the app validates your layout before plotting
-- **Style presets** — 5 built-in presets (Classic, Publication, Presentation, Minimal, Dark) + save your own
-- **Session persistence** — settings saved automatically; resume exactly where you left off
-- **Undo/redo** — Cmd+Z / Cmd+Shift+Z for all plot parameter changes
-- **Statistical wiki** — built-in reference for all 29 chart types with formulas and citations
-- **Results panel** — summary statistics, exportable as CSV or copied as TSV for pasting into other apps
-- **Fully modular architecture** — 20+ focused Python modules with zero circular dependencies
-
----
-
-## Supported File Formats
-
-| Format | Read | Write |
-|--------|------|-------|
-| .xlsx / .xls | Yes | — |
-| .cplot (Claude Plotter project) | Yes | Yes |
-| .pzfx (GraphPad Prism) | Yes (import) | — |
-
----
-
-## Chart Types
-
-Claude Plotter supports 29 chart types across a wide range of scientific use cases.
-
-### Categorical / Distribution
-
-| Chart | Description |
-|---|---|
-| **Bar Chart** | Mean +/- error bar per group; supports SEM, SD, 95% CI |
-| **Grouped Bar** | Side-by-side bars for two-factor designs |
-| **Stacked Bar** | Proportional or absolute stacked bars |
-| **Box Plot** | Median, IQR, whiskers, and outlier points |
-| **Violin Plot** | Full distribution shape per group |
-| **Dot Plot** | Each observation as a coloured dot, jittered or aligned |
-| **Subcolumn Scatter** | Individual points overlaid on group column |
-| **Before / After** | Paired measurements connected by lines |
-| **Repeated Measures** | Multi-timepoint within-subject data |
-
-### Regression / Correlation
-
-| Chart | Description |
-|---|---|
-| **Scatter Plot** | XY scatter with optional best-fit line |
-| **Line Graph** | Connected XY data, multiple series |
-| **Curve Fit** | Nonlinear curve fitting (8 built-in models) |
-| **Bubble Chart** | XY scatter with a third variable encoded as bubble size |
-
-### Epidemiology / Clinical
-
-| Chart | Description |
-|---|---|
-| **Survival Curve** | Kaplan-Meier with log-rank test |
-| **Bland-Altman** | Method comparison; limits of agreement |
-| **Forest Plot** | Meta-analysis effect sizes with CI |
-
-### Statistical Tests
-
-| Chart | Description |
-|---|---|
-| **Histogram** | Frequency or density distribution |
-| **ECDF** | Empirical cumulative distribution function |
-| **Q-Q Plot** | Quantile-quantile normality assessment |
-| **Column Statistics** | Descriptive stats table per group |
-| **Two-Way ANOVA** | Interaction plot from long-format data |
-| **Contingency** | Grouped count data; chi-square or Fisher's |
-| **Chi-Sq GoF** | Goodness-of-fit against expected proportions |
-
-### Other
-
-| Chart | Description |
-|---|---|
-| **Heatmap** | Colour-coded matrix with optional clustering |
-| **Area Chart** | Filled line chart, stacked or overlapping |
-| **Raincloud** | Half-violin + jitter + box summary |
-| **Lollipop** | Dot-and-stem alternative to bar charts |
-| **Waterfall** | Cumulative change, positive/negative coloured |
-| **Pyramid** | Back-to-back horizontal bars (e.g. population) |
-
----
-
-## Data Format
-
-All charts read from a single Excel file (`.xlsx`). The expected layout depends on the chart type:
-
-| Chart family | Row 0 | Rows 1+ |
-|---|---|---|
-| Bar, Box, Violin, Dot, Before/After | Group names | Numeric values (one per cell) |
-| Line, Scatter, Curve Fit | X-label + series names | X value, then Y replicates |
-| Grouped Bar, Stacked Bar | Category names (row 0) + subgroup names (row 1) | Numeric values |
-| Kaplan-Meier | Group names (each spanning 2 columns) | Time value, event indicator (0/1) |
-| Heatmap | Blank cell + column labels | Row label + numeric values |
-| Two-Way ANOVA | `Factor_A`, `Factor_B`, `Value` (headers) | One observation per row |
-| Contingency | Blank + outcome labels | Group name + counts |
-| Forest Plot | `Study`, `Effect`, `Lower CI`, `Upper CI` | One study per row |
-| Bland-Altman | Method A name, Method B name | Paired measurements |
-
-The app validates your spreadsheet layout before plotting and shows specific error messages if the format is unexpected.
+For UI design reference, open `docs/mockup.html` in a browser.
 
 ---
 
 ## Architecture
 
-```
-Desktop mode:   Tk shell -> pywebview -> React SPA -> FastAPI (127.0.0.1:7331)
-Web mode:       Browser -> React SPA -> FastAPI (0.0.0.0:7331)
-Both modes:     same Python business logic, same FastAPI server
-```
+Spectra runs as a pywebview shell that opens a native WKWebView window. Inside, a React SPA communicates with a local FastAPI server at `127.0.0.1:7331`. Python handles all computation (data loading, statistics, chart rendering); JavaScript handles all rendering.
 
-Claude Plotter is split into 20+ focused modules with no circular dependencies.
-
-```
-# Core
-plotter_barplot_app.py      6,688 lines   App class, sidebar, all UI
-plotter_functions.py        6,553 lines   29 Matplotlib chart functions
-plotter_widgets.py            952 lines   Design-system tokens, PButton/PEntry/etc.
-plotter_validators.py         518 lines   Standalone spreadsheet validators
-plotter_results.py            401 lines   Results panel: populate / export / copy
-
-# Phase 2 infrastructure
-plotter_registry.py           475 lines   PlotTypeConfig chart registry
-plotter_tabs.py               532 lines   Multi-tab state management
-plotter_app_icons.py          352 lines   Sidebar icon drawing
-plotter_presets.py            163 lines   Style preset system
-plotter_session.py             77 lines   Session persistence
-plotter_events.py              75 lines   EventBus pub/sub
-plotter_types.py              121 lines   Shared type definitions
-plotter_undo.py               131 lines   Undo/redo stack
-plotter_errors.py              99 lines   Structured error reporting
-plotter_comparisons.py        248 lines   Custom comparison builder
-plotter_project.py            207 lines   .cplot project files (ZIP)
-plotter_import_pzfx.py        316 lines   GraphPad .pzfx importer
-plotter_wiki_content.py     2,224 lines   Statistical wiki content
-plotter_app_wiki.py           522 lines   Wiki popup viewer
-
-# Phase 3 — Plotly/FastAPI
-plotter_server.py                         FastAPI server + auth middleware
-plotter_webview.py                        pywebview wrapper for React SPA
-plotter_plotly_theme.py                   Plotly theme matching Prism style
-plotter_spec_bar.py                       Bar chart Plotly spec builder
-plotter_spec_grouped_bar.py               Grouped bar Plotly spec builder
-plotter_spec_line.py                      Line graph Plotly spec builder
-plotter_spec_scatter.py                   Scatter plot Plotly spec builder
-
-# Phase 4 — Deployment
-plotter_web_server.py                     Standalone web server (no Tk)
-plotter_web/                              React SPA (Vite + TypeScript + Plotly.js)
-Dockerfile                                Docker deployment config
-```
+The 4 priority chart types (bar, grouped bar, line, scatter) render interactively via Plotly.js. The remaining 25 types render as high-DPI PNG via matplotlib and display as `<img>` elements. Both paths share the same Python functions and validators.
 
 ---
 
-## Test Suite
+## 29 Chart Types
 
-531 tests across 7 suites.
+### Column
+Bar Chart, Box Plot, Violin Plot, Dot Plot, Subcolumn Scatter, Before / After, Repeated Measures
 
-```bash
-# Run everything
-python3 run_all.py
+### XY
+Scatter Plot, Line Graph, Curve Fit, Area Chart, Bubble Chart, Bland-Altman
 
-# Run a specific suite
-python3 run_all.py comprehensive      # 175 tests — all chart types + stats engine
-python3 run_all.py canvas_renderer    # 109 tests — tk.Canvas renderer
-python3 run_all.py modular            #  74 tests — widgets / validators / results / tabs
-python3 run_all.py p1p2p3             #  60 tests — style parameter regressions
-python3 run_all.py control            #  20 tests — control-group statistics
-python3 run_all.py phase3             #  82 tests — Plotly spec builders + theme
-python3 run_all.py server             #  11 tests — FastAPI server endpoints
-```
+### Grouped
+Grouped Bar, Stacked Bar, Two-Way ANOVA
 
-All tests must pass before any commit.
+### Distribution
+Histogram, ECDF, Q-Q Plot, Column Statistics
+
+### Survival
+Kaplan-Meier
+
+### Correlation
+Heatmap, Forest Plot, Contingency, Chi-Square GoF
+
+### Other
+Waterfall, Lollipop, Pyramid, Raincloud
+
+---
+
+## Data Format
+
+All charts read from a single Excel (`.xlsx`) or CSV file. Layout depends on chart type:
+
+| Chart family | Row 0 | Rows 1+ |
+|---|---|---|
+| Bar, Box, Violin, Dot, Before/After | Group names | Numeric values |
+| Line, Scatter, Curve Fit | X-label + series names | X value, Y replicates |
+| Grouped Bar, Stacked Bar | Category names (row 0) + subgroup names (row 1) | Numeric values |
+| Kaplan-Meier | Group names (each spanning 2 columns) | Time value, event (0/1) |
+| Heatmap | Blank + column labels | Row label + numeric values |
+| Two-Way ANOVA | `Factor_A`, `Factor_B`, `Value` | One observation per row |
+| Contingency | Blank + outcome labels | Group name + counts |
+| Forest Plot | `Study`, `Effect`, `Lower CI`, `Upper CI` | One study per row |
+| Bland-Altman | Method A name, Method B name | Paired measurements |
+| Pyramid | Category, Left series, Right series | Values |
+
+The app validates your spreadsheet layout before plotting and shows specific error messages for any issues.
 
 ---
 
 ## Development
 
-### Quick syntax check
-
 ```bash
-python3 -c "import plotter_functions, plotter_widgets, plotter_validators, plotter_results, plotter_registry, plotter_tabs, plotter_app_icons, plotter_presets, plotter_session, plotter_events, plotter_types, plotter_undo, plotter_errors, plotter_comparisons, plotter_project, plotter_import_pzfx, plotter_wiki_content, plotter_app_wiki, plotter_server, plotter_web_server; print('OK')"
+# Run the full test suite (must pass before committing)
+python3 run_all.py
+
+# Run a specific suite
+python3 run_all.py comprehensive     # chart function tests
+python3 run_all.py stats_verify      # statistical correctness
+python3 run_all.py control           # control-group logic
+
+# Start the web server only (no pywebview, for headless dev)
+python3 plotter_web_server.py
+# Open http://localhost:7331
+
+# Syntax check all modules
+python3 -c "import plotter_functions, plotter_validators, plotter_registry, plotter_server; print('OK')"
 ```
+
+### Adding a chart type
+
+See `CLAUDE.md` Section 8 for the full 5-step checklist. Short version:
+
+1. Write the matplotlib function in `plotter_functions.py`
+2. Add a `PlotTypeConfig` entry in `plotter_registry.py`
+3. Add a Plotly spec builder in `plotter_spec_*.py` (if it's a priority type)
+4. Add tests in `tests/test_comprehensive.py`
 
 ### Commit conventions
 
 ```
-feat: add lollipop chart and wire into sidebar
-fix: correct y-axis drag clamping for zero-mean data
-test: add 8 ECDF validator tests
-refactor: extract prism_export.py from barplot_app
-docs: update README with pyramid chart layout
+feat: add lollipop chart Plotly spec builder
+fix: correct asymmetric error bar calculation for log scale
+test: add validator tests for pyramid chart
+docs: update CLAUDE.md with two-way ANOVA layout
 ```
 
 ---
 
 ## Credits
 
-Built entirely by [Claude](https://claude.ai) (Anthropic) in collaboration with Ashwin Pasupathy.
+Built by [Claude](https://claude.ai) (Anthropic) in collaboration with Ashwin Pasupathy.

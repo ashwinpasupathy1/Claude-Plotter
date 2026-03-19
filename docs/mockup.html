@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spectra — Mockup</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #f0f0f0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  /* ── Title bar ── */
+  .titlebar {
+    background: #1a1a1a;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .traffic-light { width: 12px; height: 12px; border-radius: 50%; cursor: pointer; }
+  .tl-red   { background: #ff5f57; }
+  .tl-yellow{ background: #febc2e; }
+  .tl-green { background: #28c840; }
+  .titlebar-title { color: #888; font-size: 12px; margin-left: 8px; flex: 1; text-align: center; }
+
+  /* ── Menu bar ── */
+  .menubar {
+    background: #2b2b2b;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .menu-item { color: #ccc; font-size: 12px; padding: 3px 10px; border-radius: 4px; cursor: pointer; }
+  .menu-item:hover { background: #3d3d3d; color: white; }
+
+  /* ── App body ── */
+  .app-body { display: flex; flex: 1; overflow: hidden; position: relative; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 86px;
+    background: #1e1e1e;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+    border-right: 1px solid #111;
+    scrollbar-width: none;
+  }
+  .sidebar::-webkit-scrollbar { display: none; }
+  .sidebar-group-label {
+    color: #4a4a4a;
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.9px;
+    padding: 9px 8px 3px;
+    font-weight: 700;
+    border-top: 1px solid #2a2a2a;
+    margin-top: 2px;
+  }
+  .sidebar-group-label:first-child { border-top: none; margin-top: 0; }
+  .chart-btn {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 6px 4px; cursor: pointer; border-radius: 5px;
+    margin: 1px 5px; gap: 3px; border: 1px solid transparent;
+    transition: background 0.1s;
+  }
+  .chart-btn:hover { background: #2a2a2a; }
+  .chart-btn.active { background: #1a3a5c; border-color: #2274A5; }
+  .chart-btn svg { width: 26px; height: 22px; }
+  .chart-btn-label { color: #888; font-size: 8.5px; text-align: center; line-height: 1.2; }
+  .chart-btn.active .chart-btn-label { color: #7ab8e8; }
+
+  /* ── Main content ── */
+  .main-content { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── Chart area ── */
+  .chart-area {
+    flex: 1; display: flex; flex-direction: column;
+    background: white; border-right: 1px solid #ddd; overflow: hidden;
+  }
+  .chart-toolbar {
+    background: #f7f7f7; border-bottom: 1px solid #e0e0e0;
+    padding: 5px 10px; display: flex; align-items: center;
+    gap: 6px; flex-shrink: 0;
+  }
+  .toolbar-btn {
+    background: white; border: 1px solid #ccc; border-radius: 4px;
+    padding: 3px 9px; font-size: 11px; cursor: pointer; color: #444;
+    transition: background 0.1s;
+  }
+  .toolbar-btn.primary { background: #2274A5; color: white; border-color: #2274A5; font-weight: 600; }
+  .toolbar-btn:hover:not(.primary) { background: #eee; }
+  .toolbar-btn.primary:hover { background: #1a5a8a; }
+  .toolbar-sep { width: 1px; height: 18px; background: #ddd; margin: 0 2px; }
+  .toolbar-spacer { flex: 1; }
+  .toolbar-file-label { font-size: 10px; color: #2274A5; font-weight: 600; }
+
+  /* tooltip — hover the element itself, no ? marker needed */
+  .has-tooltip { position: relative; cursor: help; }
+  .has-tooltip .tip {
+    display: none; position: absolute; bottom: calc(100% + 7px); left: 0;
+    background: #2b2b2b; color: #eee; font-size: 10px; padding: 5px 9px;
+    border-radius: 4px; white-space: nowrap; z-index: 200; pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.35); line-height: 1.4;
+  }
+  .has-tooltip:hover .tip { display: block; }
+  /* underline-dotted hint so user knows it's hoverable */
+  .form-label.has-tooltip { text-decoration: underline dotted #bbb; }
+
+  .chart-plot { flex: 1; padding: 6px; min-height: 0; }
+
+  /* ── Results strip ── */
+  .results-wrapper { flex-shrink: 0; overflow: hidden; }
+  .results-toggle {
+    background: #2a3545; color: #7ab8e8; font-size: 10px;
+    padding: 3px 14px; display: flex; align-items: center; gap: 6px;
+    cursor: pointer; border-top: 1px solid #111; user-select: none;
+  }
+  .results-toggle:hover { background: #334055; }
+  .results-toggle .arrow { transition: transform 0.2s; font-size: 8px; }
+  .results-toggle .arrow.open { transform: rotate(180deg); }
+  .results-strip {
+    background: #1e2a3a; color: #8bbfdf; font-size: 10px;
+    padding: 0 14px; display: flex; gap: 20px; flex-wrap: wrap;
+    font-family: 'Menlo', monospace; max-height: 0; overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+  }
+  .results-strip.open { max-height: 120px; padding: 6px 14px; }
+  .result-item span { color: #fff; font-weight: 600; }
+  .stat-badge {
+    display: inline-block; background: #e8f4fd; color: #2274A5;
+    border: 1px solid #b3d9f5; border-radius: 10px; font-size: 9px;
+    padding: 1px 6px; margin: 0 2px; font-weight: 600;
+  }
+  .stat-badge.sig { background: #fdecea; color: #c0392b; border-color: #f5b3b0; }
+  .stat-badge.ns  { background: #f5f5f5; color: #888; border-color: #ddd; }
+
+  /* ── Control panel ── */
+  .control-panel {
+    width: 272px; background: #fafafa; display: flex;
+    flex-direction: column; overflow: hidden; flex-shrink: 0;
+  }
+  .tab-bar {
+    display: flex; background: #f0f0f0; border-bottom: 1px solid #ddd; flex-shrink: 0;
+  }
+  .tab {
+    flex: 1; padding: 7px 4px; font-size: 11px; text-align: center;
+    cursor: pointer; color: #888; border-bottom: 2px solid transparent; font-weight: 500;
+  }
+  .tab.active { color: #2274A5; border-bottom-color: #2274A5; background: white; }
+  .tab:hover:not(.active) { background: #e8e8e8; }
+  .panel-scroll { flex: 1; overflow-y: auto; padding: 10px 10px 16px; }
+
+  .section-header {
+    background: #2274A5; color: white; font-size: 9.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.6px; padding: 3px 7px;
+    border-radius: 3px; margin: 10px 0 5px;
+  }
+  .section-header:first-child { margin-top: 0; }
+
+  .form-row { display: flex; align-items: center; margin-bottom: 5px; gap: 5px; }
+  .form-label { font-size: 11px; color: #555; width: 88px; flex-shrink: 0; display: inline-block; }
+  .form-input {
+    flex: 1; border: 1px solid #ccc; border-radius: 3px; padding: 3px 6px;
+    font-size: 11px; font-family: Arial, sans-serif; background: white; color: #333;
+  }
+  .form-select {
+    flex: 1; border: 1px solid #ccc; border-radius: 3px; padding: 3px 5px;
+    font-size: 11px; font-family: Arial, sans-serif; background: white; color: #333;
+  }
+  .file-row { display: flex; gap: 4px; margin-bottom: 5px; }
+  .file-input {
+    flex: 1; border: 1px solid #ccc; border-radius: 3px; padding: 3px 6px;
+    font-size: 10px; color: #666; background: #f9f9f9;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .file-btn {
+    background: #2274A5; color: white; border: none; border-radius: 3px;
+    padding: 3px 8px; font-size: 10px; cursor: pointer; flex-shrink: 0;
+  }
+  .color-swatch {
+    width: 19px; height: 19px; border-radius: 3px; border: 1px solid #bbb;
+    flex-shrink: 0; cursor: pointer;
+  }
+  .checkbox-row {
+    display: flex; align-items: center; gap: 5px; margin-bottom: 4px;
+    font-size: 11px; color: #555; cursor: pointer;
+  }
+  .checkbox-row input { cursor: pointer; }
+  .slider-row { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+  .slider-row label { font-size: 11px; color: #555; width: 88px; flex-shrink: 0; }
+  .slider-row input[type=range] { flex: 1; }
+  .slider-val { font-size: 10px; color: #888; width: 28px; text-align: right; }
+
+  /* advanced collapsible */
+  .advanced-toggle {
+    font-size: 10px; color: #2274A5; cursor: pointer; padding: 3px 0 5px;
+    user-select: none; display: flex; align-items: center; gap: 4px;
+  }
+  .advanced-toggle:hover { color: #1a5a8a; }
+  .advanced-body { display: none; }
+  .advanced-body.open { display: block; }
+
+  /* ── Help panel (slide-in) ── */
+  .help-panel {
+    position: absolute; top: 0; right: 0; width: 320px; height: 100%;
+    background: white; border-left: 1px solid #ddd; z-index: 50;
+    transform: translateX(100%); transition: transform 0.25s ease;
+    display: flex; flex-direction: column; box-shadow: -4px 0 16px rgba(0,0,0,0.12);
+  }
+  .help-panel.open { transform: translateX(0); }
+  .help-header {
+    background: #2274A5; color: white; padding: 10px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .help-header h3 { font-size: 13px; font-weight: 700; }
+  .help-close { color: white; cursor: pointer; font-size: 16px; opacity: 0.8; }
+  .help-close:hover { opacity: 1; }
+  .help-nav {
+    border-bottom: 1px solid #eee; padding: 8px 10px;
+    display: flex; flex-wrap: wrap; gap: 4px; flex-shrink: 0;
+  }
+  .help-tag {
+    background: #e8f4fd; color: #2274A5; border: 1px solid #b3d9f5;
+    border-radius: 10px; font-size: 9px; padding: 2px 7px; cursor: pointer;
+  }
+  .help-tag:hover { background: #2274A5; color: white; }
+  .help-body { flex: 1; overflow-y: auto; padding: 14px; font-size: 11.5px; line-height: 1.6; color: #333; }
+  .help-body h4 { font-size: 13px; color: #1a3a5c; margin-bottom: 6px; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+  .help-body p { margin-bottom: 8px; }
+  .help-body ul { margin: 0 0 8px 16px; }
+  .help-body li { margin-bottom: 3px; }
+  .help-body .ref { font-size: 10px; color: #888; margin-top: 10px; border-top: 1px solid #f0f0f0; padding-top: 6px; }
+
+  /* drop zone overlay */
+  .drop-overlay {
+    display: none; position: absolute; inset: 0; background: rgba(34,116,165,0.12);
+    border: 3px dashed #2274A5; z-index: 40; align-items: center;
+    justify-content: center; font-size: 18px; color: #2274A5; font-weight: 700;
+    pointer-events: none; border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+
+<!-- macOS title bar -->
+<div class="titlebar">
+  <div class="traffic-light tl-red"></div>
+  <div class="traffic-light tl-yellow"></div>
+  <div class="traffic-light tl-green"></div>
+  <span class="titlebar-title">Spectra — experiment_data.xlsx</span>
+</div>
+
+<!-- Menu bar -->
+<div class="menubar">
+  <div class="menu-item">File</div>
+  <div class="menu-item">Edit</div>
+  <div class="menu-item">View</div>
+  <div class="menu-item">Help</div>
+</div>
+
+<!-- App body -->
+<div class="app-body" id="appBody">
+
+  <!-- Drop overlay -->
+  <div class="drop-overlay" id="dropOverlay">Drop Excel or CSV file here</div>
+
+  <!-- Left sidebar -->
+  <div class="sidebar">
+
+    <div class="sidebar-group-label">Column</div>
+    <div class="chart-btn active">
+      <svg viewBox="0 0 26 22" fill="none">
+        <rect x="1" y="7"  width="5" height="13" fill="#E8453C" rx="1"/>
+        <rect x="10" y="3" width="5" height="17" fill="#2274A5" rx="1"/>
+        <rect x="19" y="10" width="5" height="10" fill="#32936F" rx="1"/>
+        <line x1="0" y1="20" x2="25" y2="20" stroke="#555" stroke-width="1.2"/>
+      </svg>
+      <span class="chart-btn-label">Bar Chart</span>
+    </div>
+    <div class="chart-btn">
+      <svg viewBox="0 0 26 22" fill="none">
+        <rect x="3" y="6"  width="7" height="10" fill="none" stroke="#E8453C" stroke-width="1.4" rx="1"/>
+        <line x1="3" y1="11" x2="10" y2="11" stroke="#E8453C" stroke-width="1.4"/>
+        <line x1="6.5" y1="2" x2="6.5" y2="6" stroke="#E8453C" stroke-width="1.2"/>
+        <line x1="6.5" y1="16" x2="6.5" y2="20" stroke="#E8453C" stroke-width="1.2"/>
+        <rect x="15" y="4"  width="7" height="13" fill="none" stroke="#2274A5" stroke-width="1.4" rx="1"/>
+        <line x1="15" y1="10" x2="22" y2="10" stroke="#2274A5" stroke-width="1.4"/>
+        <line x1="18.5" y1="1" x2="18.5" y2="4" stroke="#2274A5" stroke-width="1.2"/>
+        <line x1="18.5" y1="17" x2="18.5" y2="20" stroke="#2274A5" stroke-width="1.2"/>
+      </svg>
+      <span class="chart-btn-label">Box Plot</span>
+    </div>
+    <div class="chart-btn">
+      <svg viewBox="0 0 26 22" fill="none">
+        <ellipse cx="7"  cy="11" rx="3.5" ry="8.5" fill="#E8453C" opacity="0.25" stroke="#E8453C" stroke-width="1.2"/>
+        <ellipse cx="7"  cy="11" rx="2"   ry="4"   fill="#E8453C" opacity="0.65"/>
+        <ellipse cx="19" cy="11" rx="3.5" ry="8.5" fill="#2274A5" opacity="0.25" stroke="#2274A5" stroke-width="1.2"/>
+        <ellipse cx="19" cy="11" rx="2"   ry="5"   fill="#2274A5" opacity="0.65"/>
+      </svg>
+      <span class="chart-btn-label">Violin</span>
+    </div>
+    <div class="chart-btn">
+      <svg viewBox="0 0 26 22" fill="none">
+        <circle cx="5"  cy="8"  r="1.8" fill="#E8453C"/><circle cx="5"  cy="12" r="1.8" fill="#E8453C"/>
+        <circle cx="5"  cy="16" r="1.8" fill="#E8453C"/><circle cx="13" cy="6"  r="1.8" fill="#2274A5"/>
+        <circle cx="13" cy="11" r="1.8" fill="#2274A5"/><circle cx="13" cy="17" r="1.8" fill="#2274A5"/>
+        <line x1="5"  y1="6"  x2="5"  y2="18" stroke="#E8453C" stroke-width="1"/>
+        <line x1="13" y1="4"  x2="13" y2="19" stroke="#2274A5" stroke-width="1"/>
+        <line x1="0"  y1="20" x2="25" y2="20" stroke="#555" stroke-width="1"/>
+      </svg>
+      <span class="chart-btn-label">Dot Plot</span>
+    </div>
+    <div class="chart-btn">
+      <svg viewBox="0 0 26 22" fill="none">
+        <circle cx="5"  cy="17" r="1.8" fill="#E8453C"/><circle cx="5"  cy="8"  r="1.8" fill="#2274A5"/>
+        <circle cx="14" cy="13" r="1.8" fill="#E8453C"/><circle cx="14" cy="5"  r="1.8" fill="#2274A5"/>
+        <circle cx="21" cy="16" r="1.8" fill="#E8453C"/><circle cx="21" cy="9"  r="1.8" fill="#2274A5"/>
+        <line x1="5" y1="17" x2="5"  y2="8"  stroke="#888" stroke-width="0.8" stroke-dasharray="2,1.5"/>
+        <line x1="14" y1="13" x2="14" y2="5"  stroke="#888" stroke-width="0.8" stroke-dasharray="2,1.5"/>
+        <line x1="21" y1="16" x2="21" y2="9"  stroke="#888" stroke-width="0.8" stroke-dasharray="2,1.5"/>
+        <line x1="0" y1="20" x2="25" y2="20" stroke="#555" stroke-width="1"/>
+      </svg>
+      <span class="chart-btn-label">Before/After</span>
+    </div>
+
+    <div class="sidebar-group-label">XY</div>
+    <div class="chart-btn">
+      <svg viewBox="0 0 26 22" fill="none">
+        <circle cx="4"  cy="17" r="1.8" fill="#E8453C"/><circle cx="9"  cy="13" r="1.8" fill="#E8453C"/>
+        <circle cx="13" cy="8"  r="1.8" fill="#E8453C"/><circle cx="18" cy="10" r="1.8" fill="#2274A5"/>
+        <circle cx="22" cy="4"  r="1.8" fill="#2274A5"/><circle cx="7"  cy="19" r="1.8" fill="#E8453C"/>
+        <line x1="2" y1="20" x2="24" y2="20" stroke="#555" stroke-width="1"/>
+        <line x1="2" y1="1"  x2="2"  y2="20" stroke="#555" stroke-width="1"/>
+      </svg>
+      <span class="chart-btn-label">Scatter</span>
+    </div>
+    <div class="chart-btn">
+      <svg viewBox="0 0 26 22" fill="none">
+        <polyline points="2,19 7,13 13,15 19,5 24,8" fill="none" stroke="#E8453C" stroke-width="1.8"/>
+        <polyline points="2,17 7,9"  fill="none" stroke="#2274A5" stroke-width="1.8" stroke-dasharray="3,2"/>
+        <polyline points="7,9 13,12 19,3 24,6"  fill="none" stroke="#2274A5" stroke-width="1.8" stroke-dasharray="3,2"/>
+        <line x1="1" y1="20" x2="25" y2="20" stroke="#555" stroke-width="1"/>
+        <line x1="1" y1="1"  x2="1"  y2="20" stroke="#555" stroke-width="1"/>
+      </svg>
+      <span class="chart-btn-label">Line Graph</span>
+    </div>
+    <div class="chart-btn">
+      <svg viewBox="0 0 26 22" fill="none">
+        <polyline points="2,18 24,4" fill="none" stroke="#E8453C" stroke-width="1.8" stroke-dasharray="3,2"/>
+        <circle cx="4"  cy="16" r="2" fill="#2274A5"/><circle cx="8"  cy="14" r="2" fill="#2274A5"/>
+        <circle cx="13" cy="10" r="2" fill="#2274A5"/><circle cx="18" cy="7"  r="2" fill="#2274A5"/>
+        <circle cx="22" cy="5"  r="2" fill="#2274A5"/>
+        <line x1="1" y1="20" x2="25" y2="20" stroke="#555" stroke-width="1"/>
+        <line x1="1" y1="1"  x2="1"  y2="20" stroke="#555" stroke-width="1"/>
+      </svg>
+      <span class="chart-btn-label">Curve Fit</span>
+    </div>
+
+    <div class="sidebar-group-label">Grouped</div>
+    <div class="chart-btn">
+      <svg viewBox="0 0 26 22" fill="none">
+        <rect x="1"  y="8"  width="4" height="12" fill="#E8453C" rx="1"/>
+        <rect x="6"  y="4"  width="4" height="16" fill="#2274A5" rx="1"/>
+        <rect x="14" y="10" width="4" height="10" fill="#E8453C" rx="1"/>
+        <rect x="19" y="6"  width="4" height="14" fill="#2274A5" rx="1"/>
+        <line x1="0" y1="20" x2="25" y2="20" stroke="#555" stroke-width="1"/>
+      </svg>
+      <span class="chart-btn-label">Grouped Bar</span>
+    </div>
+    <div class="chart-btn">
+      <svg viewBox="0 0 26 22" fill="none">
+        <rect x="2"  y="12" width="7" height="8"  fill="#E8453C" rx="1"/>
+        <rect x="2"  y="5"  width="7" height="7"  fill="#2274A5" rx="1"/>
+        <rect x="14" y="10" width="7" height="10" fill="#E8453C" rx="1"/>
+        <rect x="14" y="4"  width="7" height="6"  fill="#2274A5" rx="1"/>
+        <line x1="0" y1="20" x2="25" y2="20" stroke="#555" stroke-width="1"/>
+      </svg>
+      <span class="chart-btn-label">Stacked Bar</span>
+    </div>
+
+    <div class="sidebar-group-label">Distribution</div>
+    <div class="chart-btn">
+      <svg viewBox="0 0 26 22" fill="none">
+        <rect x="1"  y="13" width="4" height="7"  fill="#2274A5" rx="1"/>
+        <rect x="6"  y="7"  width="4" height="13" fill="#2274A5" rx="1"/>
+        <rect x="11" y="3"  width="4" height="17" fill="#2274A5" rx="1"/>
+        <rect x="16" y="8"  width="4" height="12" fill="#2274A5" rx="1"/>
+        <rect x="21" y="14" width="4" height="6"  fill="#2274A5" rx="1"/>
+        <line x1="0" y1="20" x2="25" y2="20" stroke="#555" stroke-width="1"/>
+      </svg>
+      <span class="chart-btn-label">Histogram</span>
+    </div>
+
+    <div class="sidebar-group-label">Survival</div>
+    <div class="chart-btn">
+      <svg viewBox="0 0 26 22" fill="none">
+        <polyline points="1,2 1,10 7,10 7,14 13,14 13,17 19,17 19,20 25,20" fill="none" stroke="#E8453C" stroke-width="1.8"/>
+        <polyline points="1,2 1,8 5,8 5,13 11,13 11,16 17,16 17,19 25,19" fill="none" stroke="#2274A5" stroke-width="1.8" stroke-dasharray="3,2"/>
+        <line x1="0" y1="20" x2="25" y2="20" stroke="#555" stroke-width="1"/>
+        <line x1="0" y1="1"  x2="0"  y2="20" stroke="#555" stroke-width="1"/>
+      </svg>
+      <span class="chart-btn-label">Survival</span>
+    </div>
+
+    <div class="sidebar-group-label">Correlation</div>
+    <div class="chart-btn">
+      <svg viewBox="0 0 26 22" fill="none">
+        <rect x="1"  y="1"  width="7" height="6"  fill="#E8453C" opacity="0.85" rx="1"/>
+        <rect x="10" y="1"  width="7" height="6"  fill="#F18F01" opacity="0.6"  rx="1"/>
+        <rect x="19" y="1"  width="6" height="6"  fill="#E8453C" opacity="0.25" rx="1"/>
+        <rect x="1"  y="9"  width="7" height="6"  fill="#2274A5" opacity="0.35" rx="1"/>
+        <rect x="10" y="9"  width="7" height="6"  fill="#2274A5" opacity="0.9"  rx="1"/>
+        <rect x="19" y="9"  width="6" height="6"  fill="#2274A5" opacity="0.55" rx="1"/>
+        <rect x="1"  y="17" width="7" height="4"  fill="#32936F" opacity="0.5"  rx="1"/>
+        <rect x="10" y="17" width="7" height="4"  fill="#32936F" opacity="0.8"  rx="1"/>
+        <rect x="19" y="17" width="6" height="4"  fill="#32936F" opacity="0.3"  rx="1"/>
+      </svg>
+      <span class="chart-btn-label">Heatmap</span>
+    </div>
+    <div class="chart-btn">
+      <svg viewBox="0 0 26 22" fill="none">
+        <line x1="13" y1="1" x2="13" y2="20" stroke="#ccc" stroke-width="0.8" stroke-dasharray="2,2"/>
+        <line x1="3"  y1="5"  x2="23" y2="5"  stroke="#E8453C" stroke-width="1.5"/>
+        <rect x="9"  y="3.5" width="8" height="3" fill="#E8453C" opacity="0.25"/>
+        <circle cx="13" cy="5" r="2" fill="#E8453C"/>
+        <line x1="5"  y1="11" x2="21" y2="11" stroke="#2274A5" stroke-width="1.5"/>
+        <rect x="10" y="9.5" width="6" height="3" fill="#2274A5" opacity="0.25"/>
+        <circle cx="14" cy="11" r="2" fill="#2274A5"/>
+        <line x1="4"  y1="17" x2="19" y2="17" stroke="#32936F" stroke-width="1.5"/>
+        <rect x="8"  y="15.5" width="7" height="3" fill="#32936F" opacity="0.25"/>
+        <circle cx="11" cy="17" r="2" fill="#32936F"/>
+      </svg>
+      <span class="chart-btn-label">Forest Plot</span>
+    </div>
+
+  </div>
+
+  <!-- Main content -->
+  <div class="main-content">
+
+    <!-- Chart area -->
+    <div class="chart-area">
+      <div class="chart-toolbar">
+        <button class="toolbar-btn primary has-tooltip">▶ Plot<span class="tip">Generate chart from current data and settings</span></button>
+        <div class="toolbar-sep"></div>
+        <button class="toolbar-btn has-tooltip">↺ Reset<span class="tip">Reset all parameters to defaults</span></button>
+        <button class="toolbar-btn" id="exportBtn">⤓ Export</button>
+        <div class="toolbar-sep"></div>
+        <span class="toolbar-spacer"></span>
+        <span class="toolbar-file-label">experiment_data.xlsx · Sheet1</span>
+        <div class="toolbar-sep"></div>
+        <button class="toolbar-btn" id="helpBtn">Help Analyze</button>
+      </div>
+
+      <!-- Export options (hidden by default) -->
+      <div id="exportPanel" style="display:none; background:#f7f7f7; border-bottom:1px solid #e0e0e0; padding:6px 12px; display:none; align-items:center; gap:10px; font-size:11px; color:#555;">
+        <span>Format:</span>
+        <select style="font-size:11px; border:1px solid #ccc; border-radius:3px; padding:2px 4px;">
+          <option>PNG</option><option>SVG</option><option>PDF</option>
+        </select>
+        <span>Width:</span><input type="number" value="5" style="width:44px; font-size:11px; border:1px solid #ccc; border-radius:3px; padding:2px 4px;"> in
+        <span>Height:</span><input type="number" value="5" style="width:44px; font-size:11px; border:1px solid #ccc; border-radius:3px; padding:2px 4px;"> in
+        <span>DPI:</span>
+        <select style="font-size:11px; border:1px solid #ccc; border-radius:3px; padding:2px 4px;">
+          <option>72</option><option>150</option><option selected>300</option>
+        </select>
+        <button style="background:#2274A5; color:white; border:none; border-radius:3px; padding:3px 10px; font-size:11px; cursor:pointer;">Download</button>
+        <button id="closeExport" style="background:none; border:1px solid #ccc; border-radius:3px; padding:3px 8px; font-size:11px; cursor:pointer;">✕</button>
+      </div>
+
+      <div class="chart-plot" id="chart"></div>
+
+      <!-- Results strip -->
+      <div class="results-wrapper">
+        <div class="results-toggle" id="resultsToggle">
+          <span class="arrow" id="resultsArrow">▼</span>
+          <span>Statistical Results</span>
+          <span style="margin-left:auto; opacity:0.6; font-size:9px;">One-way ANOVA · p=0.0001</span>
+        </div>
+        <div class="results-strip" id="resultsStrip">
+          <div class="result-item">One-way ANOVA: <span>F(2,27) = 18.4, p = 0.0001</span></div>
+          <div class="result-item">Tukey HSD: Control vs Drug A <span class="stat-badge sig">p = 0.0002 ***</span> Control vs Drug B <span class="stat-badge ns">p = 0.21 ns</span> Drug A vs Drug B <span class="stat-badge sig">p = 0.008 **</span></div>
+          <div class="result-item">n = <span>10 / 10 / 10</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Control panel -->
+    <div class="control-panel">
+      <div class="tab-bar">
+        <div class="tab active">Data</div>
+        <div class="tab">Axes</div>
+        <div class="tab">Style</div>
+        <div class="tab">Stats</div>
+      </div>
+      <div class="panel-scroll">
+
+        <div class="section-header">Data File</div>
+        <div class="file-row">
+          <div class="file-input">~/Desktop/experiment_data.xlsx</div>
+          <button class="file-btn">Open…</button>
+        </div>
+        <div style="font-size:9.5px; color:#aaa; margin-bottom:6px;">or drag &amp; drop an Excel / CSV file onto the window</div>
+        <div class="form-row">
+          <span class="form-label has-tooltip">Sheet<span class="tip">Which worksheet to read data from</span></span>
+          <select class="form-select"><option>Sheet1</option><option>Sheet2</option></select>
+        </div>
+
+        <div class="section-header">Appearance</div>
+        <div class="form-row">
+          <span class="form-label has-tooltip">Palette<span class="tip">Colour set applied to groups in order</span></span>
+          <select class="form-select"><option>Prism default</option><option>Pastel</option><option>Vibrant</option><option>Grayscale</option></select>
+        </div>
+        <div class="form-row">
+          <span class="form-label">Group colours</span>
+          <div class="color-swatch" style="background:#E8453C"></div>
+          <div class="color-swatch" style="background:#2274A5"></div>
+          <div class="color-swatch" style="background:#32936F"></div>
+        </div>
+        <div class="form-row">
+          <span class="form-label has-tooltip">Preset<span class="tip">Saved style configurations — apply all style settings at once</span></span>
+          <select class="form-select"><option>Prism Classic</option><option>Minimal</option><option>Dark</option><option>Publication</option></select>
+        </div>
+
+        <div class="section-header">Error Bars</div>
+        <div class="form-row">
+          <span class="form-label has-tooltip">Error type<span class="tip">SEM = standard error of mean. SD = standard deviation. 95% CI = confidence interval.</span></span>
+          <select class="form-select"><option>SEM</option><option>SD</option><option>95% CI</option><option>None</option></select>
+        </div>
+
+        <div class="section-header">Data Points</div>
+        <div class="checkbox-row">
+          <input type="checkbox" checked>
+          <span class="has-tooltip" style="cursor:help">Show individual points<span class="tip">Overlay each raw data value as a dot on the bar</span></span>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" checked>
+          <span class="has-tooltip" style="cursor:help">Jitter<span class="tip">Spread points horizontally so overlapping values stay visible</span></span>
+        </div>
+        <div class="slider-row">
+          <label>Point size</label>
+          <input type="range" min="2" max="12" value="6">
+          <span class="slider-val">6 pt</span>
+        </div>
+        <div class="slider-row">
+          <label>Opacity</label>
+          <input type="range" min="10" max="100" value="80">
+          <span class="slider-val">80%</span>
+        </div>
+
+        <div class="section-header">Labels</div>
+        <div class="form-row">
+          <span class="form-label">Title</span>
+          <input class="form-input" type="text" value="Drug Treatment Effect">
+        </div>
+        <div class="form-row">
+          <span class="form-label">X label</span>
+          <input class="form-input" type="text" value="Treatment Group">
+        </div>
+        <div class="form-row">
+          <span class="form-label">Y label</span>
+          <input class="form-input" type="text" value="Cell Viability (%)">
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Help panel (slide-in) -->
+  <div class="help-panel" id="helpPanel">
+    <div class="help-header">
+      <h3>📊 Statistical Methods Reference</h3>
+      <span class="help-close" id="helpClose">✕</span>
+    </div>
+    <div class="help-nav">
+      <span class="help-tag">t-test</span>
+      <span class="help-tag">One-way ANOVA</span>
+      <span class="help-tag">Tukey HSD</span>
+      <span class="help-tag">Mann-Whitney</span>
+      <span class="help-tag">Kruskal-Wallis</span>
+      <span class="help-tag">Log-rank</span>
+      <span class="help-tag">Chi-square</span>
+      <span class="help-tag">Effect sizes</span>
+    </div>
+    <div class="help-body">
+      <h4>One-Way ANOVA</h4>
+      <p>Tests whether the means of three or more independent groups differ significantly. Assumes each group is normally distributed with equal variance (homoscedasticity).</p>
+      <p><strong>When to use:</strong> You have one categorical independent variable with 3+ levels and one continuous outcome. Groups are independent (different subjects).</p>
+      <p><strong>Assumptions:</strong></p>
+      <ul>
+        <li>Normality within each group (check with Shapiro-Wilk)</li>
+        <li>Equal variances (Levene's test)</li>
+        <li>Independent observations</li>
+      </ul>
+      <p><strong>If assumptions are violated:</strong> Use Kruskal-Wallis (non-parametric alternative).</p>
+      <p><strong>After a significant result:</strong> Run a post-hoc test (Tukey HSD, Bonferroni, or Dunnett vs control) to determine which specific pairs differ.</p>
+      <p class="ref">Reference: Zar, J.H. (2010). Biostatistical Analysis, 5th ed. Prentice Hall.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Plotly chart ──────────────────────────────────────────────────────────────
+const groups = ['Control', 'Drug A', 'Drug B'];
+const means  = [85.2, 41.7, 78.9];
+const sems   = [3.1, 2.8, 4.2];
+const colors = ['#E8453C', '#2274A5', '#32936F'];
+const points = [
+  [82,87,90,81,85,83,88,86,84,89],
+  [38,44,40,43,45,39,42,41,44,43],
+  [75,80,82,77,79,76,81,78,80,83],
+];
+
+const data = groups.map((g, i) => ({
+  type: 'bar', name: g, x: [g], y: [means[i]],
+  error_y: { type:'data', array:[sems[i]], visible:true, color:'#333', thickness:1.5, width:7 },
+  marker: { color: colors[i], opacity: 0.85, line: { color: '#333', width: 0.5 } },
+  width: 0.52,
+}));
+
+// Jitter points
+points.forEach((pts, i) => {
+  data.push({
+    type:'scatter', mode:'markers', name:groups[i], showlegend:false,
+    x: pts.map(() => groups[i]), y: pts,
+    marker: { color: colors[i], size: 5.5, opacity: 0.7, line:{ color:'white', width:0.8 } },
+  });
+});
+
+// Prism-style significance brackets:
+// Each bracket floats above bars with a short downward tick at each end.
+// No tall vertical lines connecting to bars — clean separation like Prism.
+// All coords in paper-x / data-y so they scale with the chart.
+const bL = 0.17, bM = 0.50, bR = 0.83; // paper-x of each bar (3 equally spaced)
+const yHigh = 102;   // floating height for Control vs Drug A bracket
+const yLow  = 94;    // floating height for Drug A vs Drug B bracket
+const tick  = 2.5;   // short downward tick length (data-y units)
+const ls    = { color:'#444', width:1.4 };
+const shapes = [
+  // ── Control vs Drug A ──
+  { type:'line', x0:bL, x1:bM, y0:yHigh,      y1:yHigh,      xref:'paper', yref:'y', line:ls },
+  { type:'line', x0:bL, x1:bL, y0:yHigh,      y1:yHigh-tick, xref:'paper', yref:'y', line:ls },
+  { type:'line', x0:bM, x1:bM, y0:yHigh,      y1:yHigh-tick, xref:'paper', yref:'y', line:ls },
+  // ── Drug A vs Drug B ──
+  { type:'line', x0:bM, x1:bR, y0:yLow,       y1:yLow,       xref:'paper', yref:'y', line:ls },
+  { type:'line', x0:bM, x1:bM, y0:yLow,        y1:yLow-tick,  xref:'paper', yref:'y', line:ls },
+  { type:'line', x0:bR, x1:bR, y0:yLow,        y1:yLow-tick,  xref:'paper', yref:'y', line:ls },
+];
+const annotations = [
+  { x:(bL+bM)/2, y:yHigh+1.8, xref:'paper', yref:'y', text:'***', showarrow:false, font:{size:13, color:'#333', family:'Arial'} },
+  { x:(bM+bR)/2, y:yLow+1.8,  xref:'paper', yref:'y', text:'**',  showarrow:false, font:{size:13, color:'#333', family:'Arial'} },
+];
+
+const layout = {
+  title: { text:'Drug Treatment Effect', font:{size:15,family:'Arial',color:'#222'}, y:0.97 },
+  xaxis: { title:{text:'Treatment Group',font:{size:12}}, showline:true, linecolor:'#222', linewidth:1.5, showgrid:false, zeroline:false, ticks:'outside', ticklen:5 },
+  yaxis: { title:{text:'Cell Viability (%)',font:{size:12}}, showline:true, linecolor:'#222', linewidth:1.5, showgrid:false, zeroline:false, ticks:'outside', ticklen:5, range:[0,112] },
+  paper_bgcolor:'white', plot_bgcolor:'white',
+  font:{ family:'Arial, sans-serif', size:11, color:'#222' },
+  legend:{ x:0.78, y:0.97, bgcolor:'rgba(255,255,255,0.8)', bordercolor:'#ddd', borderwidth:1 },
+  margin:{ l:60, r:20, t:50, b:55 },
+  shapes, annotations,
+};
+
+Plotly.newPlot('chart', data, layout, { responsive:true, displayModeBar:true, editable:true });
+
+// ── Results strip toggle ──────────────────────────────────────────────────────
+const toggle = document.getElementById('resultsToggle');
+const strip  = document.getElementById('resultsStrip');
+const arrow  = document.getElementById('resultsArrow');
+toggle.addEventListener('click', () => {
+  const isOpen = strip.classList.toggle('open');
+  arrow.textContent = isOpen ? '▲' : '▼';
+  // Let the CSS transition finish, then resize the Plotly chart to fit
+  setTimeout(() => Plotly.Plots.resize(document.getElementById('chart')), 320);
+});
+
+// ── Help panel toggle ─────────────────────────────────────────────────────────
+document.getElementById('helpBtn').addEventListener('click', () => {
+  document.getElementById('helpPanel').classList.add('open');
+});
+document.getElementById('helpClose').addEventListener('click', () => {
+  document.getElementById('helpPanel').classList.remove('open');
+});
+
+// ── Export panel toggle ───────────────────────────────────────────────────────
+const exportPanel = document.getElementById('exportPanel');
+document.getElementById('exportBtn').addEventListener('click', () => {
+  exportPanel.style.display = exportPanel.style.display === 'flex' ? 'none' : 'flex';
+});
+document.getElementById('closeExport').addEventListener('click', () => {
+  exportPanel.style.display = 'none';
+});
+
+// ── Drag and drop visual ──────────────────────────────────────────────────────
+const appBody = document.getElementById('appBody');
+const dropOverlay = document.getElementById('dropOverlay');
+appBody.addEventListener('dragover', e => { e.preventDefault(); dropOverlay.style.display = 'flex'; });
+appBody.addEventListener('dragleave', () => { dropOverlay.style.display = 'none'; });
+appBody.addEventListener('drop', e => { e.preventDefault(); dropOverlay.style.display = 'none'; });
+</script>
+</body>
+</html>

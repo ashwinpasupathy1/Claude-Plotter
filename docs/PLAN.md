@@ -1,179 +1,274 @@
-# Claude Prism — Architecture Roadmap
+# Spectra — Master Plan
+_Last updated: 2026-03-18. Replaces all previous phase documents. Agents A-E deployed._
 
-**Agreed direction:** Move from a generate-then-display model to a live direct-manipulation
-model where changes happen on the rendered chart itself. Target is Tier 3 interactivity
-(drag to reposition elements, click-to-edit, recolor, annotation).
+---
+
+## What this product is
+
+**Spectra** is a GraphPad Prism-style scientific plotting desktop application for macOS. It runs as a native window powered by pywebview, with a React SPA as the UI and a local FastAPI server as the backend. From the user's perspective it is a double-click-to-launch native app — there is no visible server, no terminal, no ports.
+
+There is no web deployment goal. Web deployment is not a priority and should not influence architectural decisions.
 
 ---
 
 ## Guiding principles
 
-1. **Separate state from rendering.** The tab system owns identity and form state. It
-   never knows how a chart is rendered. The renderer is swappable without touching tabs.
-2. **One rendering system at a time.** The canvas renderer + matplotlib parallel path was
-   a mistake. All phases use a single rendering path per chart type.
-3. **Statistics and data logic are never touched by rendering changes.** `prism_functions.py`,
-   `prism_validators.py`, `prism_registry.py` are insulated from all rendering work.
-4. **608 tests pass at the end of every phase.** Never commit a regression.
-5. **Journal-quality output is the baseline.** Visual style matching GraphPad Prism is
-   desirable but secondary. Correct statistics and clean exports are non-negotiable.
+1. **The product is a desktop app.** pywebview is the shell. The user should never see a server, a port, or a terminal.
+2. **Python owns all computation.** Stats, data loading, chart spec building — all Python. JavaScript only renders.
+3. **React owns all UI state.** The FastAPI server is stateless. Each request to `/render` is self-contained.
+4. **plotter_functions.py is the backbone.** All 29 chart functions stay in Python. The matplotlib implementations are the source of truth for chart logic even as Plotly handles rendering.
+5. **Old Tkinter UI is a blueprint, not a product.** `plotter_barplot_app.py` is a 6,688-line spec document for what the React UI must contain. It is not maintained going forward.
+6. **Tests test behaviour, not implementation.** Tests that test Tk widgets or a missing canvas renderer module are dead weight. Tests that verify statistical correctness and chart function outputs are permanent.
 
 ---
 
-## Phase 1 — Clean foundation (tabs + renderer unification)
+## Target architecture
 
-**Goal:** Tabs working for all 29 chart types. Single rendering path.
+```
+User double-clicks Spectra.app
+        │
+        ▼
+plotter_webview.py          ← thin entry point
+  ├── starts FastAPI server  (background thread, 127.0.0.1:7331, invisible)
+  └── opens pywebview window (WKWebView on macOS, full-screen native window)
+        │
+        ▼
+React SPA  (plotter_web/src/)
+  ├── sidebar:         chart type selector (29 types, 7 groups with correct labels)
+  ├── main area:       Plotly.js chart (interactive, editable on-chart + in panel)
+  ├── right panel:     tabbed controls — Data | Axes | Style | Stats
+  ├── help panel:      slide-in statistical methods wiki (29 sections, triggered by ? button)
+  └── results strip:   collapsible — hidden by default, toggle arrow to expand
+        │
+        │  POST /render { chart_type, kw }   → returns Plotly spec + stats results
+        │  POST /render-png { chart_type, kw } → returns base64 PNG (fallback)
+        ▼
+FastAPI server  (plotter_server.py)
+  ├── plotter_spec_*.py     ← Plotly JSON specs with significance brackets (4 types)
+  └── plotter_functions.py  ← matplotlib → PNG fallback (25 remaining types)
 
-### Deliverables
-- `prism_tabs.py` — `TabState`, `TabManager`, `TabBar` widget
-- Drop `prism_canvas_renderer.py` entirely
-- Replace canvas renderer with `mpl_connect` pick events (Tier 1 bar recoloring)
-- Tab bar at top of right pane: icon + title + × close + + new + drag-to-reorder
-- New tabs default to bar chart
-- Thread-safe render routing: `(tab_id, job_id)` passed through `_run` → `_do_run` → `_embed_plot`
-- Live preview suppressed during tab switch (guard in `TabManager.switch_to`)
-- 608/608 tests pass
-
-### What does NOT change
-- `prism_functions.py`, `prism_validators.py`, `prism_registry.py`, `prism_results.py`
-- `prism_widgets.py`
-- All test files
-- Export pipeline
-
-### See also
-`docs/PHASE1_TABS.md` — full implementation spec for this phase.
+Data flow for file loading:
+  User clicks "Open…" OR drags file onto window
+  → pywebview native file dialog / drop event → returns local path
+  → React stores path in state → passed in kw on every /render call
+  → FastAPI reads Excel (.xlsx) or CSV with pandas
+```
 
 ---
 
-## Phase 2 — Web renderer for priority charts
+## Rendering strategy
 
-**Goal:** Replace `FigureCanvasTkAgg` with a `pywebview` + Plotly.js panel for the four
-priority chart types. Both renderers coexist during this phase.
+Only 4 of 29 chart types currently have Plotly spec builders. The strategy is **hybrid**:
 
-### Priority chart types
-Bar, Grouped Bar, Line, Scatter.
+| Category | Chart types | Rendering |
+|---|---|---|
+| **Plotly (interactive)** | bar, grouped_bar, line, scatter | `plotter_spec_*.py` → Plotly.js |
+| **matplotlib → PNG (Phase 1)** | remaining 25 types | `plotter_functions.py` → base64 PNG |
+| **Plotly (future)** | box, violin, histogram, heatmap, bubble, stacked_bar | migrate incrementally |
+| **Plotly (hard, later)** | forest_plot, before_after, bland_altman, pyramid | custom work required |
 
-### Architecture
-```
-Python process
-├── FastAPI server (~200 lines, background thread)
-│   ├── POST /render  →  accepts chart spec kwargs, returns Plotly JSON
-│   └── POST /event   ←  receives edit events from JS (Phase 3)
-└── prism_spec_{bar,grouped_bar,line,scatter}.py
-        Each builds a plotly.graph_objects Figure in Python and returns fig.to_json()
-
-pywebview panel (replaces _plot_frame for priority charts)
-└── Plotly.js renders the JSON spec
-```
-
-### Key decisions
-- Chart specs are built in **Python** using `plotly.py` — no JavaScript written for specs.
-- `TabState` gets an optional `plotly_spec: dict | None` field alongside `fig`.
-- `_embed_plot` checks `chart_type`: priority → pywebview; others → FigureCanvasTkAgg.
-- Tab system is unchanged. The frame container interface is the stable boundary.
-- Validate `pywebview` embedding on macOS before starting (run `pip install pywebview`
-  and confirm WKWebView opens cleanly).
-
-### Pre-work (can be done in parallel with Phase 1)
-- Build and validate a Prism-style Plotly template (open spine, Arial, Prism palette).
-- Confirm `pywebview` embeds correctly on the current macOS version.
-- Define journal export requirements (DPI, size, format) for the export pipeline.
-
-### What does NOT change
-- Tab system (`prism_tabs.py`) — zero changes expected.
-- `prism_functions.py` — matplotlib versions retained as export fallback.
-- All 25 non-priority chart types — continue using FigureCanvasTkAgg.
+Serving a PNG to the React frontend is one additional endpoint (`/render-png`) that returns `{ "image": "data:image/png;base64,..." }`. The React component renders it in an `<img>` tag. This is intentionally simple.
 
 ---
 
-## Phase 3 — Direct manipulation
+## All design decisions (fully settled)
 
-**Goal:** Tier 2–3 interactivity on priority charts. Edit elements directly on the chart.
+| Decision | Choice | Notes |
+|---|---|---|
+| **App name** | Spectra | Scientific (spectrum/color), premium feel, GraphPad Prism peer |
+| **Desktop shell** | pywebview | Native macOS WKWebView, no Electron |
+| **Chart rendering** | Hybrid: Plotly + matplotlib-PNG | Plotly for 4 types now, PNG fallback for 25, migrate incrementally |
+| **UI state ownership** | React owns all state | Server is stateless; each `/render` call is self-contained |
+| **File loading** | Native file dialog + drag-and-drop | pywebview API for dialog; drop event on app window |
+| **Data formats** | Excel (.xlsx) + CSV | One `elif` in validators; pandas handles both natively |
+| **Stats UI** | Progressive disclosure (Option C) | Common options always visible; advanced in collapsible "Advanced" section |
+| **Help Analyze** | Slide-in panel (Option A) | `?` toolbar button slides wiki panel in from right, chart stays visible |
+| **Results strip** | Collapsible, hidden by default | Toggle arrow at bottom; stats shown in Stats tab panel when strip hidden |
+| **Chart editing** | Both on-chart and in panel, synced | Plotly `editable: true` + bidirectional sync with right panel |
+| **Export** | Configurable | Format (PNG / SVG / PDF) + width + height (inches) + DPI (72/150/300) |
+| **Multi-tab** | Deferred — one chart at a time | Not in scope for current agent sprint |
+| **Packaging** | PyInstaller → `.app` bundle | No Python install required for end users |
+| **Significance brackets** | Yes — Plotly shapes + annotations | Horizontal bar + vertical drops + stars/p-value above; matches Prism style |
+| **Tooltips** | Yes — every control has a `?` hover tooltip | Plain English explanation of what each option does |
 
-### Interactions
-- Click title / axis labels → inline text edit (Plotly `editable: true` covers this for free)
-- Drag legend → reposition
-- Click bar → color picker → recolor (replaces the mpl_connect implementation from Phase 1)
-- Drag Y-axis limit → rescale
-- Add annotation by clicking chart area
-- All edits post events back to Python → form state updates bidirectionally
+## Sidebar chart groupings (corrected)
 
-### Event flow
-```
-User drags title in pywebview
-    → JS posts { event: "title_changed", value: "New Title" } to FastAPI /event
-    → Python: tab.vars_snapshot["title"] = "New Title"
-    → If form is visible: self._vars["title"].set("New Title")
-    → Live preview suppressed (change came from chart, not form)
-```
+The sidebar groups charts by data type, matching GraphPad Prism's structure.
 
-### What does NOT change
-- Tab system — zero changes expected.
-- FastAPI server from Phase 2 — adds `/event` endpoint only.
-- Statistics engine, validators, registry.
-
----
-
-## Phase 4 — Deployment readiness
-
-**Goal:** App runnable as a web service. Desktop version remains via pywebview.
-
-### Architecture shift
-```
-Current (Phases 1–3):  Tkinter shell  +  pywebview plot panel
-Phase 4:               React SPA      +  Python FastAPI backend
-                       (desktop: pywebview wrapping the React SPA)
-                       (web:     serve React + FastAPI normally)
-```
-
-### What transfers cleanly
-- All Python business logic (stats, validators, registry, spec builders).
-- `TabManager` state management logic → maps to React/Zustand state.
-- FastAPI server → already present, just needs auth + deployment config.
-
-### What gets rewritten
-- Tkinter left panel → React components.
-- `TabBar` Tk widget → React tab component.
-
-### Note
-Phase 4 is only worth pursuing if Phase 2/3 validate that Plotly can meet the
-journal-quality output bar. Do not start Phase 4 until Phase 3 is stable.
+| Group | Charts (29 total) |
+|---|---|
+| **Column** | Bar Chart, Box Plot, Violin, Dot Plot, Subcolumn Scatter, Before/After, Repeated Measures |
+| **XY** | Scatter, Line Graph, Curve Fit, Area Chart, Bubble, Bland-Altman |
+| **Grouped** | Grouped Bar, Stacked Bar, Two-Way ANOVA |
+| **Distribution** | Histogram, ECDF, Q-Q Plot, Column Stats |
+| **Survival** | Kaplan-Meier |
+| **Correlation** | Heatmap, Forest Plot, Contingency, Chi-Square GoF |
+| **Other** | Waterfall, Lollipop, Pyramid, Raincloud |
 
 ---
 
-## Parallel work available at each phase
+## Agent breakdown
 
-### During Phase 2
-- Develop and validate Prism-style Plotly template in a notebook.
-- Confirm `pywebview` on current macOS version.
-- Define journal export spec (DPI, figure sizes, formats).
+Run all agents simultaneously after decisions above are confirmed. None block each other except Agent E (runs last).
 
-### During Phase 3
-- Audit all 25 non-priority chart types for Plotly coverage difficulty.
-  - Easy (standard Plotly): box, violin, heatmap, histogram, bubble, scatter variants.
-  - Hard (custom): subcolumn scatter, before/after, chi-square GoF, forest plot, pyramid.
-- Define direct manipulation interaction spec: which elements draggable vs click-to-edit.
+### Agent A — React UI (Opus 4.6, largest scope)
+**Goal:** Build the full React SPA UI so the app is actually usable as Spectra.
+
+Uses `plotter_barplot_app.py` as the spec — every control, label, and parameter in the Tk app must appear somewhere in the React UI. Reference `docs/mockup.html` for target layout and visual style.
+
+Deliverables:
+- **App name**: "Spectra" everywhere (title bar, window title, about)
+- **Sidebar**: 29 chart type buttons with SVG icons, grouped into 7 labelled sections (Column / XY / Grouped / Distribution / Survival / Correlation / Other). See sidebar groupings table in PLAN.md.
+- **Right panel**: tabbed Data / Axes / Style / Stats controls
+  - Every control has a `?` hover tooltip in plain English
+  - Stats tab: common options always visible (test type, post-hoc, show brackets, show p-values); advanced options (permutations, alpha, correction method) in a collapsible "Advanced ▸" section
+- **File open**: `window.pywebview.api.open_file()` → local path in React state; also drag-and-drop onto app window
+- **Chart area**: Plotly spec from `/render` (interactive, `editable: true`); PNG `<img>` from `/render-png` for fallback charts; on-chart edits (title, axis labels) sync bidirectionally to right panel
+- **Help panel**: slide-in from right when `?` toolbar button clicked; renders `plotter_wiki_content.py` sections as formatted HTML; close button slides it back
+- **Results strip**: collapsed by default; toggle arrow at bottom edge expands it; stats also shown inline in Stats tab
+- **Toolbar**: Plot button, Reset, Export (with format/size/DPI picker: PNG/SVG/PDF, width×height in inches, 72/150/300 DPI), `?` Help button
+- **Significance brackets**: rendered as Plotly shapes+annotations on chart when stats are enabled
+
+### Agent B — FastAPI extension
+**Goal:** Extend the server to handle all 29 chart types and file loading cleanly.
+
+Deliverables:
+- `/render-png` endpoint: calls `plotter_functions.py`, returns base64 PNG for the 25 non-Plotly chart types
+- `/open-file` endpoint (or pywebview API bridge): triggers native macOS file dialog
+- CSV support: detect `.csv` vs `.xlsx` in validators and all spec builders
+- `/chart-types` endpoint: return full metadata (label, icon name, tab_mode) for React sidebar
+- Clean error responses: `{ ok: false, error: "...", detail: "..." }` for all failure modes
+
+### Agent C — matplotlib PNG fallback
+**Goal:** Make all 25 remaining chart types work in the React UI via PNG rendering.
+
+Deliverables:
+- `/render-png` implementation that routes to the correct `plotter_functions.py` function
+- React `PlotterImage` component that displays base64 PNG with download button
+- Verify all 29 chart types render without crashing (use existing `test_comprehensive.py`)
+- Basic PNG export (right-click save or download button)
+
+### Agent D — Test suite cleanup
+**Goal:** Retire dead tests, fix broken ones, add API tests. Target: ~200 focused tests.
+
+Current state:
+- `test_canvas_renderer.py` — 0 tests run (module doesn't exist). **Delete.**
+- `test_modular.py` — 74 tests for Tk widgets and tabs. **Delete** (Tk is retired).
+- `test_p1_p2_p3.py` — 80 style regression tests, heavily overlapping with comprehensive. **Delete.**
+- `test_comprehensive.py` — 309 tests for matplotlib chart functions. **Keep, trim duplicates.**
+- `test_stats_verification.py` — 37 statistical correctness tests. **Keep.**
+- `test_control.py` — 20 control-group logic tests. **Keep.**
+- `test_phase3_plotly.py` — 11 Plotly spec tests, 9 failing (plotly not installed). **Fix: install plotly, keep.**
+
+New tests to add:
+- `tests/test_api.py` — FastAPI endpoint tests (health, render, render-png, chart-types, error cases)
+- `tests/test_validators.py` — extracted from test_modular, keep validator logic tests
+- `tests/test_specs.py` — expand Plotly spec tests to cover all implemented spec builders
+
+New target: ~200 tests across 6 suites in ~30 seconds.
+
+### Agent E — File structure + CLAUDE.md (runs last)
+**Goal:** Make the repository human-readable and document everything comprehensively.
+
+File structure target:
+```
+claude-plotter/
+├── CLAUDE.md                    ← comprehensive LLM context document (rewritten)
+├── README.md                    ← user-facing: what it is, how to run, screenshots
+├── docs/
+│   ├── PLAN.md                  ← this file
+│   ├── mockup.html              ← UI mockup (rendered, screenshottable)
+│   └── archive/                 ← phase2/, phase3/, phase4/ moved here
+├── backend/
+│   ├── plotter_functions.py     ← 29 matplotlib chart functions
+│   ├── plotter_validators.py    ← Excel/CSV layout validators
+│   ├── plotter_registry.py      ← PlotTypeConfig registry
+│   ├── plotter_server.py        ← FastAPI app factory
+│   ├── plotter_spec_bar.py      ← Plotly spec builders (4 types)
+│   ├── plotter_spec_grouped_bar.py
+│   ├── plotter_spec_line.py
+│   ├── plotter_spec_scatter.py
+│   ├── plotter_plotly_theme.py  ← shared Plotly theme
+│   ├── plotter_results.py       ← results panel data
+│   ├── plotter_wiki_content.py  ← statistical reference text
+│   └── plotter_import_pzfx.py  ← GraphPad .pzfx importer
+├── desktop/
+│   ├── plotter_webview.py       ← entry point: starts server + opens pywebview
+│   ├── plotter_widgets.py       ← (legacy Tk, keep for reference)
+│   └── plotter_app_icons.py     ← SVG icon definitions (reference for React)
+├── frontend/                    ← (rename from plotter_web/)
+│   ├── src/
+│   │   ├── App.tsx
+│   │   ├── Sidebar.tsx
+│   │   ├── ControlPanel.tsx
+│   │   ├── ChartArea.tsx
+│   │   └── ResultsStrip.tsx
+│   ├── package.json
+│   └── vite.config.ts
+├── tests/
+│   ├── test_comprehensive.py    ← chart function tests (trimmed)
+│   ├── test_stats.py            ← merged stats_verify + control
+│   ├── test_specs.py            ← Plotly spec builder tests
+│   ├── test_api.py              ← FastAPI endpoint tests (new)
+│   ├── test_validators.py       ← validator tests (extracted)
+│   └── plotter_test_harness.py  ← shared fixtures
+├── run_all.py                   ← unified test runner
+├── requirements.txt             ← all deps including plotly
+├── requirements-dev.txt         ← test deps
+└── Dockerfile                   ← web deployment (if ever needed)
+```
+
+CLAUDE.md rewrite must cover:
+- Product definition and target user
+- Full architecture diagram (pywebview → React → FastAPI → plotter_functions)
+- Every file: purpose, key functions/classes, dependencies, what NOT to touch
+- Rendering pipeline: Plotly path vs PNG fallback path
+- How to add a new chart type (5-step checklist, updated for new structure)
+- Test suite: what each suite tests, how to run, target counts
+- Excel/CSV layout conventions for all 29 chart types
+- Statistical methods: which function uses which test, effect sizes, corrections
+- Known issues and gotchas
+- How to package as .app with PyInstaller
 
 ---
 
-## Rendering decision record
+## Current test status (as of 2026-03-18)
 
-**Why not Tkinter + matplotlib overlay?**
-Coordinate sync between matplotlib and Tk overlay is fragile and breaks on every resize.
-Two rendering systems. Drag interactions are laggy (30–150ms redraws). Closed off future
-web deployment.
+```
+python3 run_all.py
+  comprehensive:   309/309  ✓
+  p1p2p3:           80/80   ✓  (to be deleted by Agent D)
+  control:          20/20   ✓
+  canvas_renderer:   0/0    ✓  (vacuous — module missing, to be deleted)
+  modular:          74/74   ✓  (to be deleted by Agent D)
+  stats_verify:     37/37   ✓
+  phase3_plotly:    2/11    ✗  9 failures (plotly not installed)
 
-**Why not Qt?**
-Near-total UI rewrite (~7,900 lines of Tkinter). Only worth it starting from scratch.
+Total: 522 passing, 9 failing, 531 registered
+```
 
-**Why Plotly.js + pywebview?**
-- Plotly.js is a retained-mode renderer: objects persist, drag is smooth at 60fps.
-- `plotly.py` means chart specs are written in Python, not JavaScript.
-- SVG/PDF export from Plotly is vector-quality, suitable for journals.
-- pywebview uses WKWebView on macOS — native, fast, well-maintained.
-- Same Python backend serves a web deployment in Phase 4 with no changes.
+---
 
-**Why drop `prism_canvas_renderer.py`?**
-It was a parallel implementation of bar charts that required maintaining two codebases
-in sync. The interactive features it provided (recolor, Y-drag, width-drag) are
-superseded by Phase 2/3 Plotly interactivity. Removed in Phase 1.
+## What exists and works right now
+
+| Component | Status |
+|---|---|
+| 29 matplotlib chart functions | Working, tested |
+| Statistical engine (t-test, ANOVA, Dunnett, KM, etc.) | Working, tested |
+| Excel validators for all 29 chart types | Working, tested |
+| FastAPI server (`/render`, `/event`, `/health`, `/chart-types`) | Working |
+| Plotly spec builders for bar, grouped_bar, line, scatter | Working (needs plotly installed) |
+| pywebview desktop shell | Built, untested end-to-end |
+| React SPA | Stub only — App.tsx has hardcoded empty values |
+| PyInstaller packaging | Not started |
+
+## What the old Tk app (`plotter_barplot_app.py`) tells us
+
+This 6,688-line file is the living spec for the React UI. Every tab, control, and parameter that the React UI needs is already implemented there. Before Agent A starts, read:
+- `_tab_data()` — Data tab controls
+- `_tab_axes()` — Axes tab controls
+- `_tab_stats()` — Stats tab controls (and all `_tab_stats_*` variants per chart type)
+- `_collect()` — the complete `kw` dict sent to chart functions (defines the API contract)
+- `_build_sidebar()` — 29 chart types and their groupings
+
+Do not delete this file until the React UI has parity.
