@@ -1,5 +1,8 @@
 // PythonServer.swift — Manages the Python uvicorn subprocess that hosts
 // the Refraction analysis engine on 127.0.0.1:7331.
+//
+// Supports bundled Python (inside .app bundle) with fallback to system python3.
+// Captures stderr, writes crash logs, and auto-restarts once on unexpected exit.
 
 import Foundation
 
@@ -15,10 +18,22 @@ final class PythonServer {
 
     private(set) var state: State = .idle
 
+    /// The last crash message, shown to the user via alert.
+    private(set) var lastCrashMessage: String?
+
+    /// Whether the crash alert should be presented.
+    var showCrashAlert: Bool = false
+
     private var process: Process?
     private var stdoutPipe: Pipe?
     private var stderrPipe: Pipe?
     private var healthPollTimer: Timer?
+
+    /// Accumulated stderr output from the Python process.
+    private var stderrBuffer: String = ""
+
+    /// Whether we have already attempted one auto-restart.
+    private var hasAutoRestarted: Bool = false
 
     /// Port the Python server listens on.
     static let port: Int = 7331
@@ -29,6 +44,12 @@ final class PythonServer {
     /// Interval between /health polls during startup.
     private static let pollInterval: TimeInterval = 0.5
 
+    /// Directory for crash logs.
+    private static var logDirectory: URL {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return home.appendingPathComponent("Library/Logs/Refraction")
+    }
+
     // MARK: - Lifecycle
 
     /// Start the Python analysis server as a subprocess.
@@ -37,31 +58,46 @@ final class PythonServer {
         guard state == .idle || isFailedState else { return }
 
         state = .starting
+        stderrBuffer = ""
 
         let proc = Process()
         let stdout = Pipe()
         let stderr = Pipe()
 
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        proc.arguments = [
-            "python3", "-c",
-            """
-            import uvicorn
-            from refraction.server.api import _make_app
-            uvicorn.run(_make_app(), host='127.0.0.1', port=\(Self.port), log_level='warning')
-            """
-        ]
-
-        // Working directory: project root (parent of RefractionApp/)
-        let appDir = Bundle.main.bundleURL
-            .deletingLastPathComponent()  // Contents/
-        // In development, assume CWD or use project root
+        let python = Self.pythonPath()
         let projectRoot = Self.resolveProjectRoot()
+
+        NSLog("[PythonServer] Using Python: %@", python)
+        NSLog("[PythonServer] Project root: %@", projectRoot.path)
+
+        if python.contains("/usr/bin/env") {
+            // System Python via env lookup
+            proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            proc.arguments = [
+                "python3", "-c",
+                """
+                import uvicorn
+                from refraction.server.api import _make_app
+                uvicorn.run(_make_app(), host='127.0.0.1', port=\(Self.port), log_level='warning')
+                """
+            ]
+        } else {
+            // Bundled Python — invoke directly
+            proc.executableURL = URL(fileURLWithPath: python)
+            proc.arguments = [
+                "-c",
+                """
+                import uvicorn
+                from refraction.server.api import _make_app
+                uvicorn.run(_make_app(), host='127.0.0.1', port=\(Self.port), log_level='warning')
+                """
+            ]
+        }
+
         proc.currentDirectoryURL = projectRoot
 
-        // Inherit the current environment so python3 resolves correctly
+        // Build environment with PYTHONPATH
         var env = ProcessInfo.processInfo.environment
-        // Ensure the refraction package is importable
         let pythonPath = projectRoot.path
         if let existing = env["PYTHONPATH"] {
             env["PYTHONPATH"] = "\(pythonPath):\(existing)"
@@ -73,12 +109,40 @@ final class PythonServer {
         proc.standardOutput = stdout
         proc.standardError = stderr
 
+        // Continuously read stderr in background
+        stderr.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
+            DispatchQueue.main.async {
+                self?.stderrBuffer += text
+            }
+        }
+
         // Handle unexpected termination
         proc.terminationHandler = { [weak self] process in
             DispatchQueue.main.async {
                 guard let self else { return }
+                // Stop reading stderr
+                stderr.fileHandleForReading.readabilityHandler = nil
+
                 if case .running = self.state {
-                    self.state = .failed("Server exited with code \(process.terminationStatus)")
+                    let exitCode = process.terminationStatus
+                    let message = "Python server exited unexpectedly (code \(exitCode))"
+                    self.writeCrashLog(message: message, stderr: self.stderrBuffer)
+                    self.state = .failed(message)
+
+                    // Auto-restart once
+                    if !self.hasAutoRestarted {
+                        self.hasAutoRestarted = true
+                        NSLog("[PythonServer] Auto-restarting after crash...")
+                        self.process = nil
+                        self.state = .idle
+                        self.start()
+                    } else {
+                        // Already tried auto-restart, show alert
+                        self.lastCrashMessage = message
+                        self.showCrashAlert = true
+                    }
                 }
             }
         }
@@ -90,7 +154,9 @@ final class PythonServer {
         do {
             try proc.run()
         } catch {
-            state = .failed("Failed to launch python3: \(error.localizedDescription)")
+            let msg = "Failed to launch Python: \(error.localizedDescription)"
+            state = .failed(msg)
+            writeCrashLog(message: msg, stderr: "")
             return
         }
 
@@ -108,6 +174,9 @@ final class PythonServer {
             process = nil
             return
         }
+
+        // Stop stderr reading
+        stderrPipe?.fileHandleForReading.readabilityHandler = nil
 
         // SIGTERM for graceful shutdown
         proc.terminate()
@@ -130,6 +199,30 @@ final class PythonServer {
                 self?.process = nil
             }
         }
+    }
+
+    /// Dismiss the crash alert.
+    func dismissCrashAlert() {
+        showCrashAlert = false
+        lastCrashMessage = nil
+    }
+
+    // MARK: - Python Resolution
+
+    /// Resolve the Python binary path.
+    /// Priority: bundled python-env > system python3
+    private static func pythonPath() -> String {
+        // Check for bundled Python inside the .app bundle
+        if let bundled = Bundle.main.resourceURL?
+            .appendingPathComponent("python-env/bin/python3").path,
+           FileManager.default.fileExists(atPath: bundled) {
+            NSLog("[PythonServer] Found bundled Python at: %@", bundled)
+            return bundled
+        }
+
+        // Fall back to system Python for development
+        NSLog("[PythonServer] No bundled Python found, using system python3")
+        return "/usr/bin/env python3"
     }
 
     // MARK: - Private
@@ -166,6 +259,7 @@ final class PythonServer {
                     timer.invalidate()
                     self.healthPollTimer = nil
                     self.state = .running
+                    NSLog("[PythonServer] Server is healthy and running on port %d", Self.port)
                 }
             }
             task.resume()
@@ -178,14 +272,58 @@ final class PythonServer {
     /// Read stderr output and transition to failed state.
     private func readStderrAndFail() {
         var message = "Server failed to start within \(Int(Self.startupTimeout))s"
-        if let pipe = stderrPipe {
+        if !stderrBuffer.isEmpty {
+            message += ": \(String(stderrBuffer.prefix(500)))"
+        } else if let pipe = stderrPipe {
             let data = pipe.fileHandleForReading.availableData
             if let text = String(data: data, encoding: .utf8), !text.isEmpty {
-                message += ": \(text.prefix(500))"
+                message += ": \(String(text.prefix(500)))"
             }
         }
+        writeCrashLog(message: message, stderr: stderrBuffer)
         state = .failed(message)
         stop()
+    }
+
+    // MARK: - Crash Logging
+
+    /// Write a crash log entry to ~/Library/Logs/Refraction/crash.log
+    private func writeCrashLog(message: String, stderr: String) {
+        let logDir = Self.logDirectory
+        let logFile = logDir.appendingPathComponent("crash.log")
+
+        do {
+            try FileManager.default.createDirectory(at: logDir, withIntermediateDirectories: true)
+
+            let timestamp = ISO8601DateFormatter().string(from: Date())
+            let entry = """
+            === Refraction Crash Report ===
+            Timestamp: \(timestamp)
+            Message:   \(message)
+            Python:    \(Self.pythonPath())
+
+            --- stderr output ---
+            \(stderr.isEmpty ? "(empty)" : String(stderr.suffix(2000)))
+            === End Report ===
+
+
+            """
+
+            if FileManager.default.fileExists(atPath: logFile.path) {
+                let handle = try FileHandle(forWritingTo: logFile)
+                handle.seekToEndOfFile()
+                if let data = entry.data(using: .utf8) {
+                    handle.write(data)
+                }
+                handle.closeFile()
+            } else {
+                try entry.write(to: logFile, atomically: true, encoding: .utf8)
+            }
+
+            NSLog("[PythonServer] Crash log written to: %@", logFile.path)
+        } catch {
+            NSLog("[PythonServer] Failed to write crash log: %@", error.localizedDescription)
+        }
     }
 
     /// Resolve the project root directory (parent of RefractionApp/).
