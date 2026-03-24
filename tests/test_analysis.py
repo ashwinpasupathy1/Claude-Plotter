@@ -23,7 +23,7 @@ from refraction.analysis.helpers import resolve_colors, extract_config
 from refraction.analysis.bar import analyze_bar, _calc_error
 from refraction.analysis.stats_annotator import annotate, check_normality, _cohens_d
 from refraction.analysis.engine import analyze, available_chart_types
-from refraction.specs.theme import PRISM_PALETTE
+from refraction.core.config import PRISM_PALETTE
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

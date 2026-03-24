@@ -23,7 +23,7 @@ echo "  Refraction Setup"
 echo "  ================"
 echo ""
 
-# ── Check Python ────────────────────────────────────────────────
+# -- Check Python --
 if command -v python3 &>/dev/null; then
     PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
     ok "Python $PYTHON_VERSION found"
@@ -32,56 +32,23 @@ else
     exit 1
 fi
 
-# ── Install Python dependencies ─────────────────────────────────
+# -- Install Python dependencies --
 info "Installing Python dependencies..."
 pip3 install -r requirements.txt --quiet
 ok "Python dependencies installed"
 
-# ── Check/install Node.js ───────────────────────────────────────
-if command -v node &>/dev/null && command -v npm &>/dev/null; then
-    NODE_VERSION=$(node --version 2>&1)
-    ok "Node.js $NODE_VERSION found"
-
-    # Build React SPA
-    info "Building React SPA..."
-    cd "$SCRIPT_DIR/plotter_web"
-
-    if [ ! -d "node_modules" ]; then
-        info "Installing Node dependencies..."
-        npm install --silent 2>&1 | tail -1
-    fi
-
-    npm run build 2>&1 | tail -3
-    cd "$SCRIPT_DIR"
-
-    if [ -d "plotter_web/dist" ]; then
-        ok "React SPA built → plotter_web/dist/"
-    else
-        err "Build failed — plotter_web/dist/ not created"
-        exit 1
-    fi
-else
-    warn "Node.js not found. The SPA will be auto-built on first launch."
-    warn "Install Node.js for faster startup: https://nodejs.org or: brew install node"
-fi
-
-# ── Verify setup ────────────────────────────────────────────────
+# -- Verify setup --
 info "Verifying setup..."
 
 python3 -c "
-from refraction.core import chart_helpers, validators
-from refraction.app import widgets, results
+from refraction.analysis import analyze
+from refraction.core import chart_helpers, validators, registry
 from refraction.server import api
 print('  Python modules: OK')
 " 2>&1 || { err "Python module import failed"; exit 1; }
 
-if [ -d "plotter_web/dist" ]; then
-    echo "  React SPA: OK"
-else
-    echo "  React SPA: will auto-build on first launch"
-fi
-
 ok "Setup complete!"
 echo ""
-echo "  To run:  python3 plotter_desktop.py"
+echo "  The Python analysis server powers the SwiftUI desktop app."
+echo "  To run tests:  python3 -m pytest tests/ -v"
 echo ""

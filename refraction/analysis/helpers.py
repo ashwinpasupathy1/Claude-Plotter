@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from refraction.specs.theme import PRISM_PALETTE
+from refraction.core.config import PRISM_PALETTE
 
 
 def read_data(excel_path: str, sheet=0, *, header=0) -> pd.DataFrame:

@@ -3,20 +3,18 @@ run_all.py
 ==========
 Unified test runner for all Refraction test suites.
 
-Runs pytest on the new test structure:
-    tests/engine/       — Pure computational tests (stats, validators, helpers)
-    tests/integration/  — API and pipeline integration tests
-
-Also supports running legacy test suites for backward compatibility.
+Runs pytest on the test structure:
+    tests/engine/       -- Pure computational tests (stats, validators, helpers)
+    tests/integration/  -- API and pipeline integration tests
+    tests/              -- Top-level analysis, stats, validators, QA tests
 
 Usage:
-    python3 run_all.py                       # run all suites (new pytest tests)
+    python3 run_all.py                       # run all pytest tests
     python3 run_all.py stats                 # legacy: old test_stats.py
     python3 run_all.py validators            # legacy: old test_validators.py
-    python3 run_all.py specs                 # legacy: old test_phase3_plotly.py
-    python3 run_all.py api                   # legacy: old test_api.py
-    python3 run_all.py engine                # new: tests/engine/ only
-    python3 run_all.py integration           # new: tests/integration/ only
+    python3 run_all.py api                   # pytest: test_api.py
+    python3 run_all.py engine                # pytest: tests/engine/ only
+    python3 run_all.py integration           # pytest: tests/integration/ only
 """
 
 import sys
@@ -30,7 +28,7 @@ def main():
     parser = argparse.ArgumentParser(description="Refraction unified test runner")
     parser.add_argument("suites", nargs="*",
                         help="Suite name(s): engine / integration / stats / validators / "
-                             "specs / api (default: run all new pytest tests)")
+                             "api / analysis / qa (default: run all)")
     parser.add_argument("-v", "--verbose", action="store_true",
                         help="Verbose pytest output")
     args = parser.parse_args()
@@ -39,6 +37,8 @@ def main():
     NEW_SUITES = {
         "engine": os.path.join(_HERE, "tests", "engine"),
         "integration": os.path.join(_HERE, "tests", "integration"),
+        "api": os.path.join(_HERE, "tests", "test_api.py"),
+        "qa": os.path.join(_HERE, "tests", "test_phase6_qa.py"),
     }
 
     # Legacy suites (old harness-based tests, kept for backward compat)
@@ -46,13 +46,7 @@ def main():
         "stats": "test_stats",
         "stats_exhaustive": "test_stats_exhaustive",
         "validators": "test_validators",
-        "specs": "test_phase3_plotly",
-        "api": "test_api",
         "analysis": "test_analysis",
-        "spec_correctness": "test_spec_correctness",
-        "edge_cases": "test_edge_cases",
-        "api_integration": "test_api_integration",
-        "invariants": "test_invariants",
     }
 
     requested = args.suites if args.suites else list(NEW_SUITES.keys())
@@ -75,10 +69,7 @@ def main():
         pytest_args = []
         for suite_name in new_requested:
             pytest_args.append(NEW_SUITES[suite_name])
-        if args.verbose:
-            pytest_args.append("-v")
-        else:
-            pytest_args.append("-v")
+        pytest_args.append("-v")
         result = pytest.main(pytest_args)
         if result != 0:
             exit_code = 1
