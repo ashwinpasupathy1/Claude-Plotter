@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "refraction"
+version = "0.7.0"
+description = "GraphPad Prism-style scientific plotting application for macOS"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Ashwin Pasupathy" },
+]
+
+# Core dependencies shared by all modes (web + desktop).
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "plotly>=5.18.0",
+    "pandas>=2.0.0",
+    "openpyxl>=3.1.0",
+    "scipy>=1.11.0",
+    "numpy>=1.26.0",
+]
+
+[project.optional-dependencies]
+# Web-only — no Tk, no pywebview, no kaleido.
+web = []
+
+# Desktop — adds pywebview for the native window and kaleido for raster export.
+desktop = [
+    "pywebview>=4.4.0",
+    "kaleido>=0.2.1",
+    "xlrd>=2.0.1",
+]
+
+# Development / CI.
+dev = [
+    "pytest>=8.0",
+    "pyright>=1.1.350",
+    "xlrd>=2.0.1",
+]
+
+[project.scripts]
+refraction-web = "refraction.server.web_entry:main"
+
+# ---------------------------------------------------------------------------
+# Tool configuration
+# ---------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+# The legacy test harness (plotter_test_harness.py) runs tests as module-level
+# calls rather than pytest-discovered functions.  The run_all.py script is the
+# primary runner.  pytest can still discover standard test_* functions if added.
+
+[tool.pyright]
+include = ["refraction"]
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
+reportMissingImports = true
+reportMissingTypeStubs = false
+
+[tool.setuptools.packages.find]
+include = ["refraction*"]

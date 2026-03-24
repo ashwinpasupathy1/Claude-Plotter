@@ -1288,8 +1288,6 @@ class ExecutionMixin:
             # ── Render via Plotly webview ──────────────────────────────────────
             if kw and self._try_webview_embed(target_frame, str(_pt_web), kw):
                 self._plot_frame = target_frame
-                if tab is not None:
-                    tab.canvas_widget = None
             else:
                 # Webview failed — show error in the plot frame
                 for child in target_frame.winfo_children():

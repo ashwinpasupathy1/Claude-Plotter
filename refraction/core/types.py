@@ -122,16 +122,14 @@ class PlotRequest:
 
 
 # ---------------------------------------------------------------------------
-# ChartData — parsed chart data passed between the parse layer, Plotly
-# spec builders, and matplotlib export functions.
+# ChartData — parsed chart data passed between the parse layer and Plotly
+# spec builders.
 #
 # Design rationale
 # ----------------
-# Every chart function and every Plotly spec builder previously called
-# pd.read_excel() independently, so a single render caused multiple disk
-# reads.  ChartData is parsed ONCE per render in _do_run and then shared
-# across all consumers (Plotly spec builder for display, matplotlib for
-# export-only).
+# Every Plotly spec builder previously called pd.read_excel() independently,
+# so a single render caused multiple disk reads.  ChartData is parsed ONCE
+# per render in _do_run and then shared across all consumers.
 #
 # Layout variants
 # ---------------
@@ -239,3 +237,275 @@ def _safe_float(v) -> Optional[float]:
         return None if math.isnan(f) else f
     except (ValueError, TypeError):
         return None
+
+
+# ---------------------------------------------------------------------------
+# PlotState — typed mirror of the App._vars dict
+# ---------------------------------------------------------------------------
+#
+# MIGRATION GUIDE
+# ===============
+# The Tk app currently stores all UI state in ``App._vars: dict[str, tk.Variable]``
+# with string keys and untyped tk.StringVar / tk.BooleanVar / tk.IntVar values.
+# PlotState is a typed dataclass that mirrors every key in ``_VAR_DEFAULTS``
+# (defined in refraction/app/main.py) with proper Python types.
+#
+# The intent is NOT to replace _vars in one giant refactor.  Instead, adopt
+# PlotState incrementally using these steps:
+#
+# Phase A — Snapshot / restore (low-risk, immediate benefit)
+# ----------------------------------------------------------
+# 1. After _collect() builds the flat ``kw`` dict, construct a PlotState:
+#        state = PlotState.from_var_dict(self._vars)
+#    This gives you a typed, IDE-inspectable object for the current form.
+#
+# 2. Tab save/restore (TabState.vars_snapshot) can store a PlotState instead
+#    of a raw dict.  Serialise with ``asdict(state)`` and reconstruct with
+#    ``PlotState(**d)``.
+#
+# Phase B — Typed collect (medium effort)
+# ----------------------------------------
+# 3. Rewrite _collect_display / _collect_labels / _collect_stats to read
+#    from a PlotState instead of raw ``self._vars[key].get()`` calls.
+#    Example:
+#        # Before:
+#        kw["show_points"] = self._vars["show_points"].get()
+#        # After:
+#        state = PlotState.from_var_dict(self._vars)
+#        kw["show_points"] = state.show_points
+#
+# Phase C — Single source of truth (larger refactor)
+# ---------------------------------------------------
+# 4. Replace ``App._vars`` with a single ``App._state: PlotState`` instance.
+#    UI widgets bind to PlotState fields via a thin adapter that wraps each
+#    field as a tk.Variable (similar to how _get_var auto-creates vars today).
+#    This makes the complete set of state visible in one place and enables
+#    static type checking across the entire codebase.
+#
+# PlotState field names exactly match the keys in _VAR_DEFAULTS so that
+# ``PlotState.from_var_dict()`` and ``PlotState.to_var_values()`` can convert
+# between the two representations without manual mapping.
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PlotState:
+    """Typed representation of every UI variable in _VAR_DEFAULTS.
+
+    Field names match the string keys used in App._vars so conversion is
+    mechanical.  All defaults match the values in _VAR_DEFAULTS.
+    """
+
+    # ── File / sheet ──────────────────────────────────────────────────────
+    excel_path: str = ""
+    sheet: str = ""
+
+    # ── Data tab ──────────────────────────────────────────────────────────
+    error: str = "SEM (Standard Error)"
+    show_points: bool = True
+    show_n_labels: bool = False
+    show_value_labels: bool = False
+    color: str = "Default"
+    title: str = ""
+    xlabel: str = ""
+    ytitle: str = ""
+    jitter_amount: str = "0"
+    error_below_bar: bool = False
+
+    # ── Axes tab ──────────────────────────────────────────────────────────
+    yscale: str = "Linear"
+    ylim_lo: str = ""
+    ylim_hi: str = ""
+    figw: str = ""
+    figh: str = ""
+    font_size: str = "12"
+    ref_line_y: str = "0"
+    ref_line_enabled: bool = False
+    ylim_data_min: bool = False
+    ylim_none: bool = True
+    ylim_mode: int = 0        # 0=Auto, 1=Data min, 2=Manual
+    xlim_mode: int = 0        # 0=Auto, 1=Manual
+    xlim_lo: str = ""
+    xlim_hi: str = ""
+    gridlines: bool = False
+    open_points: bool = False
+    grid_style: str = "None"
+    horizontal: bool = False
+    show_median: bool = False
+    bar_alpha: str = "0.85"
+    xscale: str = "Linear"
+    ref_line_label: str = ""
+    bar_width: str = "0.6"
+    line_width: str = "1.5"
+    marker_style: str = "Different Markers"
+    marker_size: str = "7"
+    notch_box: bool = False
+
+    # ── Stats tab (shared) ────────────────────────────────────────────────
+    show_stats: bool = False
+    show_ns: bool = False
+    show_p_values: bool = False
+    show_effect_size: bool = False
+    show_test_name: bool = False
+    show_normality_warning: bool = True
+    p_sig_threshold: str = "0.05"
+    bracket_style: str = "Lines"
+    stats_test: str = "Parametric"
+    n_permutations: str = ""
+    mc_correction: str = "Holm-Bonferroni"
+    posthoc: str = "Tukey HSD"
+    control: str = ""
+
+    # ── Stacked bar ───────────────────────────────────────────────────────
+    stacked_horizontal: bool = False
+    stacked_mode: str = "absolute"
+    stacked_value_labels: bool = False
+    xtick_labels_str: str = ""
+    twin_y_series_str: str = ""
+
+    # ── Reference V-line ──────────────────────────────────────────────────
+    ref_vline_enabled: bool = False
+    ref_vline_x: str = "0"
+    ref_vline_label: str = ""
+
+    # ── Scatter-specific ──────────────────────────────────────────────────
+    show_regression: bool = False
+    show_ci_band: bool = False
+    show_prediction_band: bool = False
+    show_correlation: bool = False
+    correlation_type: str = "Pearson"
+    show_regression_table: bool = False
+    one_sample_mu0: str = "0"
+
+    # ── Kaplan-Meier ──────────────────────────────────────────────────────
+    show_ci: bool = True
+    show_censors: bool = True
+    show_at_risk: bool = False
+
+    # ── Heatmap ───────────────────────────────────────────────────────────
+    annotate: bool = False
+    cluster_rows: bool = False
+    cluster_cols: bool = False
+    robust: bool = False
+    heatmap_fmt: str = ""
+    heatmap_vmin: str = ""
+    heatmap_vmax: str = ""
+    heatmap_center: str = ""
+
+    # ── Two-way ANOVA ─────────────────────────────────────────────────────
+    show_posthoc: bool = False
+
+    # ── Grouped bar ───────────────────────────────────────────────────────
+    show_anova_per_group: bool = False
+
+    # ── Histogram ─────────────────────────────────────────────────────────
+    hist_bins: str = "0"
+    hist_density: bool = False
+    hist_overlay_normal: bool = False
+
+    # ── Curve fit ─────────────────────────────────────────────────────────
+    curve_model: str = "4PL Sigmoidal (EC50/IC50)"
+    cf_show_ci: bool = True
+    cf_show_residuals: bool = False
+    cf_show_equation: bool = True
+    cf_show_r2: bool = True
+    cf_show_params: bool = True
+
+    # ── Column stats ──────────────────────────────────────────────────────
+    cs_show_normality: bool = True
+    cs_show_ci: bool = True
+    cs_show_cv: bool = True
+
+    # ── Contingency ───────────────────────────────────────────────────────
+    ct_show_pct: bool = True
+    ct_show_expected: bool = False
+
+    # ── Repeated measures ─────────────────────────────────────────────────
+    rm_show_lines: bool = True
+    rm_test_type: str = "Parametric"
+
+    # ── Priority-1 styling (axes tab) ─────────────────────────────────────
+    axis_style: str = "Open (default)"
+    tick_dir: str = "Outward (default)"
+    minor_ticks: bool = False
+    point_size: str = "6"
+    point_alpha: str = "0.80"
+    cap_size: str = "4"
+    legend_pos: str = "Upper right"
+    spine_width: str = "0.8"
+
+    # ── Chi-square GoF ────────────────────────────────────────────────────
+    gof_expected_equal: bool = True
+
+    # ── Bubble chart ──────────────────────────────────────────────────────
+    bubble_scale: str = "1.0"
+    bubble_show_labels: bool = False
+
+    # ── Dot plot ──────────────────────────────────────────────────────────
+    dp_show_mean: bool = True
+    dp_show_median: bool = False
+
+    # ── Bland-Altman ──────────────────────────────────────────────────────
+    ba_show_ci: bool = True
+
+    # ── Forest plot ───────────────────────────────────────────────────────
+    fp_ref_value: str = "0"
+    fp_show_weights: bool = True
+    fp_show_summary: bool = True
+
+    # ── Tick intervals ────────────────────────────────────────────────────
+    ytick_interval: str = ""
+    xtick_interval: str = ""
+
+    # ── Figure background ─────────────────────────────────────────────────
+    fig_bg: str = "White"
+
+    # ── Comparison mode (not in _VAR_DEFAULTS but used by stats) ─────────
+    comparison_mode: int = 0  # 0=all-pairs, 1=vs-ctrl
+
+    # ------------------------------------------------------------------
+    # Conversion helpers
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_var_dict(cls, vars_dict: dict) -> "PlotState":
+        """Build a PlotState from the App._vars dict.
+
+        Each entry in vars_dict is expected to be a tk.Variable (StringVar,
+        BooleanVar, IntVar) whose ``.get()`` returns the current value.
+        Keys that don't match a PlotState field are silently ignored.
+
+        Usage in the app:
+            state = PlotState.from_var_dict(self._vars)
+        """
+        import dataclasses as _dc
+        known = {f.name for f in _dc.fields(cls)}
+        kw: Dict[str, Any] = {}
+        for key, var in vars_dict.items():
+            if key not in known:
+                continue
+            try:
+                kw[key] = var.get()
+            except Exception:
+                pass  # skip broken / destroyed tk vars
+        return cls(**kw)
+
+    def to_var_values(self) -> Dict[str, Any]:
+        """Return a plain dict of {field_name: python_value}.
+
+        Suitable for restoring into App._vars via:
+            for key, val in state.to_var_values().items():
+                if key in self._vars:
+                    self._vars[key].set(val)
+        """
+        return asdict(self)
+
+    def to_flat_kwargs(self) -> Dict[str, Any]:
+        """Convert to the flat kwargs dict consumed by spec builders.
+
+        This applies the same mapping transforms that _collect_display,
+        _collect_labels, and _collect_stats currently perform (e.g.
+        "Linear" -> "linear", "SEM (Standard Error)" -> "sem").
+        For now returns raw values; the mapping layer can be added
+        incrementally as _collect methods are migrated.
+        """
+        return asdict(self)

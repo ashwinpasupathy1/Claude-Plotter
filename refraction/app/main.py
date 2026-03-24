@@ -4,17 +4,17 @@ plotter_barplot_app.py
 ======================
 Refraction -- main application window (macOS, tabbed ttk layout).
 
-Module structure
-----------------
-plotter_barplot_app.py  -- this file; App class + PLOT_REGISTRY + icon helpers
-plotter_widgets.py      -- design-system tokens, PButton/PEntry/PCheckbox etc.
-plotter_validators.py   -- standalone spreadsheet validation functions
-plotter_results.py      -- results-panel population, export, and copy helpers
-plotter_functions.py    -- matplotlib plot functions (29 chart types)
-plotter_tabs.py         -- TabState, TabManager, TabBar (plot tab system)
-
-The App class imports from all four companion modules so each can be
-developed, tested, and documented independently.
+Module structure (refraction/ package)
+--------------------------------------
+refraction/app/main.py       -- this file; App class + UI wiring
+refraction/app/widgets.py    -- design-system tokens, PButton/PEntry/PCheckbox etc.
+refraction/app/collect.py    -- CollectMixin: assembles kwargs from UI vars
+refraction/app/execution.py  -- ExecutionMixin: render pipeline + webview embed
+refraction/core/validators.py -- standalone spreadsheet validation functions
+refraction/app/results.py    -- results-panel population, export, and copy
+refraction/core/chart_helpers.py -- palettes, stats helpers, constants (no matplotlib)
+refraction/core/tabs.py      -- TabState, TabManager, TabBar (plot tab system)
+refraction/specs/             -- Plotly spec builders (29 chart types)
 """
 import collections, json, logging, math, os, threading, traceback, uuid
 
@@ -80,7 +80,7 @@ except ImportError as _e:
 # appears immediately. They are loaded on a background thread via
 # _import_functions() and also imported lazily inside each method
 # that needs them (_do_run, _load_sheets, etc.).
-# matplotlib and pandas are NOT imported here at module level.
+# pandas is NOT imported here at module level.
 
 # Try to use TkinterDnD for drag-and-drop support
 try:
@@ -122,15 +122,13 @@ def _load_icon_nsimage():
 
 
 def set_dock_icon():
-    """Set the macOS dock icon from bytes  -  immune to Cocoa path-resolution
-    resets that happen when matplotlib/seaborn import NSApplication internally.
+    """Set the macOS dock icon from bytes.
 
     Three-pronged approach:
-      1. Load icon from raw bytes (not file path)  -  works inside bundles.
+      1. Load icon from raw bytes (not file path) — works inside bundles.
       2. Explicitly set NSApplicationActivationPolicyRegular so macOS treats
          the process as a proper GUI app.
-      3. Called at startup, every 250 ms during heavy imports, and once more
-         after all imports finish  -  see _watch_dock_icon.
+      3. Called at startup and once more after background imports finish.
     """
     try:
         from AppKit import NSApplication, NSApplicationActivationPolicyRegular
@@ -500,14 +498,10 @@ class App(StatsTabMixin, ValidationMixin, CollectMixin, FileIOMixin,
     def _watch_dock_icon(self):
         """Re-apply the dock icon on a timer while heavy imports run.
 
-        matplotlib/seaborn/openpyxl each touch NSApplication on first import,
-        resetting the dock icon.  The watcher fires every 200 ms until the
-        module import background thread signals it is done (_pf_ready=True),
+        Some libraries (openpyxl, etc.) touch NSApplication on first import,
+        which can reset the dock icon.  The watcher fires every 200 ms until
+        the background import thread signals it is done (_pf_ready=True),
         then does one final restore after a short settling delay.
-
-        Note: since matplotlib is now deferred to first export, the icon is
-        only at risk from openpyxl during startup — the watcher still handles
-        that correctly.
         """
         set_dock_icon()
         if not self._pf_ready:
@@ -547,18 +541,12 @@ class App(StatsTabMixin, ValidationMixin, CollectMixin, FileIOMixin,
 
     def _do_import(self):
         try:
-            # Import plotter_functions module only — matplotlib/seaborn/scipy
-            # are NOT loaded here.  They load lazily on first export call via
-            # pf._ensure_imports().  This keeps startup fast and keeps matplotlib
-            # completely out of memory during normal (Plotly-rendered) sessions.
+            # Import chart_helpers (stats, palettes, constants) — no matplotlib.
             from refraction.core import chart_helpers as pf
             self._pf = pf
             # pandas is lightweight and needed immediately for file validation.
             import pandas as _pandas_mod
             self._pd = _pandas_mod
-            # _plt stays None until first matplotlib export — callers must guard:
-            #   if self._plt is not None: self._plt.close(...)
-            self._plt = None
             self._pf_ready = True
             self.after(0, set_dock_icon)
             def _check_ready():
@@ -1557,8 +1545,8 @@ class App(StatsTabMixin, ValidationMixin, CollectMixin, FileIOMixin,
         right_hsb.config(command=self._plot_canvas.xview)
 
         self._plot_frame    = None   # points to active tab's plot_frame; set by TabManager
-        self._canvas_widget = None   # FigureCanvasTkAgg; updated on tab switch
-        self._fig           = None   # matplotlib Figure; updated on tab switch
+        # NOTE: _canvas_widget and _fig removed — matplotlib rendering path
+        # was fully replaced by Plotly/kaleido in Phase 5+.
         self._last_kw       = None   # kw dict from last successful render (for export)
         self._last_chart_type = None # chart type from last successful render
         self._zoom_level    = 1.0

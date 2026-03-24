@@ -124,7 +124,7 @@ PLOT_PARAM_DEFAULTS: dict = {
     # ── Error bar style ───────────────────────────────────────────────────
     "cap_size":    4.0,       # error bar cap width in pts
     # ── Legend ────────────────────────────────────────────────────────────
-    "legend_pos":  "upper right",  # matplotlib loc string or "outside"/"none"
+    "legend_pos":  "upper right",  # Plotly legend position or "outside"/"none"
     # ── Tick intervals (0 = auto) ─────────────────────────────────────────
     "ytick_interval": 0.0,
     "xtick_interval": 0.0,

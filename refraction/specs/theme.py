@@ -1,4 +1,4 @@
-"""Plotly theme matching Refraction's matplotlib style."""
+"""Plotly theme for Refraction — GraphPad Prism-inspired defaults."""
 
 PRISM_PALETTE = [
     "#E8453C", "#2274A5", "#32936F", "#F18F01", "#A846A0",
