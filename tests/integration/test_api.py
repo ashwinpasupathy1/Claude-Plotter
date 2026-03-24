@@ -92,72 +92,68 @@ class TestAnalyzeBar:
     def test_basic_analyze_returns_chart_spec(self, client, bar_xlsx):
         resp = client.post("/analyze", json={
             "chart_type": "bar",
-            "data_path": bar_xlsx,
+            "excel_path": bar_xlsx,
         })
         assert resp.status_code == 200
         data = resp.json()
         assert data["ok"] is True
-        spec = data["spec"]
-        assert spec["chart_type"] == "bar"
-        assert "data" in spec
-        assert "axes" in spec
-        assert "style" in spec
+        assert data["chart_type"] == "bar"
+        assert "groups" in data
 
     def test_two_groups_in_output(self, client, bar_xlsx):
         data = client.post("/analyze", json={
             "chart_type": "bar",
-            "data_path": bar_xlsx,
+            "excel_path": bar_xlsx,
         }).json()
-        groups = data["spec"]["data"]["groups"]
-        assert len(groups) == 2
+        assert len(data["groups"]) == 2
 
     def test_title_passed_through(self, client, bar_xlsx):
         data = client.post("/analyze", json={
             "chart_type": "bar",
-            "data_path": bar_xlsx,
+            "excel_path": bar_xlsx,
             "config": {"title": "My Bar Chart"},
         }).json()
-        assert data["spec"]["title"] == "My Bar Chart"
+        assert data["title"] == "My Bar Chart"
 
     def test_three_groups(self, client, tmp_path):
         path = str(tmp_path / "three_groups.xlsx")
         rows = [["A", "B", "C"], [1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
         pd.DataFrame(rows).to_excel(path, index=False, header=False)
         data = client.post("/analyze", json={
-            "chart_type": "bar", "data_path": path,
+            "chart_type": "bar", "excel_path": path,
         }).json()
         assert data["ok"] is True
-        assert len(data["spec"]["data"]["groups"]) == 3
+        assert len(data["groups"]) == 3
 
 
 class TestAnalyzeOther:
     def test_scatter(self, client, xy_xlsx):
         data = client.post("/analyze", json={
-            "chart_type": "scatter", "data_path": xy_xlsx,
+            "chart_type": "scatter", "excel_path": xy_xlsx,
         }).json()
         assert data["ok"] is True
 
     def test_line(self, client, xy_xlsx):
         data = client.post("/analyze", json={
-            "chart_type": "line", "data_path": xy_xlsx,
+            "chart_type": "line", "excel_path": xy_xlsx,
         }).json()
         assert data["ok"] is True
 
     def test_box(self, client, bar_xlsx):
         data = client.post("/analyze", json={
-            "chart_type": "box", "data_path": bar_xlsx,
+            "chart_type": "box", "excel_path": bar_xlsx,
         }).json()
         assert data["ok"] is True
 
     def test_violin(self, client, bar_xlsx):
         data = client.post("/analyze", json={
-            "chart_type": "violin", "data_path": bar_xlsx,
+            "chart_type": "violin", "excel_path": bar_xlsx,
         }).json()
         assert data["ok"] is True
 
     def test_histogram(self, client, bar_xlsx):
         data = client.post("/analyze", json={
-            "chart_type": "histogram", "data_path": bar_xlsx,
+            "chart_type": "histogram", "excel_path": bar_xlsx,
         }).json()
         assert data["ok"] is True
 
@@ -170,6 +166,7 @@ class TestAnalyzeErrors:
     def test_unknown_chart_type(self, client):
         resp = client.post("/analyze", json={
             "chart_type": "nonexistent_chart",
+            "excel_path": "/nonexistent/file.xlsx",
             "config": {},
         })
         data = resp.json()
@@ -178,7 +175,7 @@ class TestAnalyzeErrors:
     def test_missing_file(self, client):
         resp = client.post("/analyze", json={
             "chart_type": "bar",
-            "data_path": "/nonexistent/file.xlsx",
+            "excel_path": "/nonexistent/file.xlsx",
         })
         data = resp.json()
         assert data["ok"] is False

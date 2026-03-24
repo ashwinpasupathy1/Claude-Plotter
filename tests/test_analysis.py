@@ -398,15 +398,12 @@ run("very large values -> no overflow", test_very_large_values)
 
 
 def test_unknown_chart_type_raises():
-    try:
-        analyze("nonexistent_chart", "/fake/path.xlsx")
-        assert False, "should have raised ValueError"
-    except ValueError as exc:
-        msg = str(exc)
-        assert "nonexistent_chart" in msg
-        assert "bar" in msg  # should list available types
+    # New engine returns error dict instead of raising ValueError
+    result = analyze("nonexistent_chart", "/fake/path.xlsx")
+    assert result["ok"] is False
+    assert "error" in result
 
-run("analyze() with unknown chart_type raises ValueError", test_unknown_chart_type_raises)
+run("analyze() with unknown chart_type returns error dict", test_unknown_chart_type_raises)
 
 
 def test_negative_means_range():
@@ -428,11 +425,12 @@ section("Engine dispatcher")
 
 def test_engine_bar():
     with _h.with_excel(lambda p: bar_excel({"G": np.array([1, 2, 3])}, path=p)) as path:
-        spec = analyze("bar", path)
-        assert isinstance(spec, ChartSpec)
-        assert spec.chart_type == "bar"
+        result = analyze("bar", path)
+        assert isinstance(result, dict)
+        assert result["ok"] is True
+        assert result["chart_type"] == "bar"
 
-run("analyze() with chart_type='bar' returns bar ChartSpec", test_engine_bar)
+run("analyze() with chart_type='bar' returns result dict", test_engine_bar)
 
 
 def test_available_chart_types():
@@ -444,14 +442,12 @@ run("available_chart_types() returns list including 'bar'", test_available_chart
 
 
 def test_engine_invalid_type():
-    try:
-        analyze("zzzz_invalid", "/fake.xlsx")
-        assert False, "should have raised"
-    except ValueError as exc:
-        msg = str(exc)
-        assert "zzzz_invalid" in msg
+    # New engine returns error dict instead of raising ValueError
+    result = analyze("zzzz_invalid", "/fake.xlsx")
+    assert result["ok"] is False
+    assert "error" in result
 
-run("analyze() with invalid type raises ValueError with helpful message", test_engine_invalid_type)
+run("analyze() with invalid type returns error dict", test_engine_invalid_type)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

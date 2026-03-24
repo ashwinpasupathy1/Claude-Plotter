@@ -95,7 +95,7 @@ def analyze_layout(panel_configs: list[dict], **layout_kw) -> dict:
     Returns:
         dict with keys: ok (bool), layout (LayoutSpec as dict), errors (list)
     """
-    from refraction.server.api import _build_spec
+    from refraction.analysis.engine import analyze as _analyze_chart
 
     errors: list[str] = []
     panels: list[PanelSpec] = []
@@ -150,15 +150,15 @@ def analyze_layout(panel_configs: list[dict], **layout_kw) -> dict:
             padding_px=pc.get("padding_px", 12),
         )
 
-        # Run the spec builder for this panel
+        # Run analysis for this panel
         try:
-            spec_json = _build_spec(chart_type, config)
-            spec_dict = json.loads(spec_json)
-            if isinstance(spec_dict, dict) and "error" in spec_dict:
-                errors.append(f"Panel {panel.label}: {spec_dict['error']}")
+            excel_path = config.get("excel_path", "")
+            result = _analyze_chart(chart_type, excel_path, config)
+            if isinstance(result, dict) and not result.get("ok", False):
+                errors.append(f"Panel {panel.label}: {result.get('error', 'unknown error')}")
                 panel.chart_spec = None
             else:
-                panel.chart_spec = spec_dict
+                panel.chart_spec = result
         except Exception as e:
             _log.exception("Layout panel %s failed", panel.label)
             errors.append(f"Panel {panel.label}: {e}")

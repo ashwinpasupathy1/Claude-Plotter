@@ -49,11 +49,11 @@ class TestUploadAndAnalyze:
         try:
             resp = client.post("/analyze", json={
                 "chart_type": "bar",
-                "data_path": server_path,
+                "excel_path": server_path,
             })
             data = resp.json()
             assert data["ok"] is True
-            groups = data["spec"]["data"]["groups"]
+            groups = data["groups"]
             assert len(groups) == 2
             # Verify means
             ctrl_mean = np.mean([1.0, 2.0, 3.0])
@@ -70,11 +70,11 @@ class TestUploadAndAnalyze:
         try:
             resp = client.post("/analyze", json={
                 "chart_type": "scatter",
-                "data_path": server_path,
+                "excel_path": server_path,
             })
             data = resp.json()
             assert data["ok"] is True
-            assert data["spec"]["chart_type"] == "scatter"
+            assert data["chart_type"] == "scatter"
         finally:
             if os.path.exists(server_path):
                 os.unlink(server_path)
@@ -92,8 +92,8 @@ class TestUploadAndAnalyze:
         try:
             resp = client.post("/analyze", json={
                 "chart_type": "box",
-                "data_path": server_path,
-                "config": {"stats_test": "t-test"},
+                "excel_path": server_path,
+                "config": {"stats_test": "parametric"},
             })
             data = resp.json()
             assert data["ok"] is True

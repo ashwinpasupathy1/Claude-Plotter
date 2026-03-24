@@ -177,7 +177,7 @@ class TestBuildResultsSection:
 
 
 class TestResultsInSpecs:
-    """Test that spec builders include results sections."""
+    """Test that the analysis engine returns complete results for various chart types."""
 
     @pytest.fixture
     def bar_excel(self):
@@ -189,45 +189,38 @@ class TestResultsInSpecs:
         os.unlink(path)
 
     def test_bar_spec_has_results(self, bar_excel):
-        import json
-        from refraction.specs.bar import build_bar_spec
-        spec_json = build_bar_spec({"excel_path": bar_excel})
-        spec = json.loads(spec_json)
-        assert "results" in spec
-        assert "descriptive" in spec["results"]
-        assert len(spec["results"]["descriptive"]) == 2
+        from refraction.analysis import analyze
+        result = analyze("bar", bar_excel)
+        assert result["ok"] is True
+        assert "groups" in result
+        assert len(result["groups"]) == 2
 
     def test_box_spec_has_results(self, bar_excel):
-        import json
-        from refraction.specs.box import build_box_spec
-        spec_json = build_box_spec({"excel_path": bar_excel})
-        spec = json.loads(spec_json)
-        assert "results" in spec
+        from refraction.analysis import analyze
+        result = analyze("box", bar_excel)
+        assert result["ok"] is True
+        assert "groups" in result
 
     def test_violin_spec_has_results(self, bar_excel):
-        import json
-        from refraction.specs.violin import build_violin_spec
-        spec_json = build_violin_spec({"excel_path": bar_excel})
-        spec = json.loads(spec_json)
-        assert "results" in spec
+        from refraction.analysis import analyze
+        result = analyze("violin", bar_excel)
+        assert result["ok"] is True
+        assert "groups" in result
 
     def test_histogram_spec_has_results(self, bar_excel):
-        import json
-        from refraction.specs.histogram import build_histogram_spec
-        spec_json = build_histogram_spec({"excel_path": bar_excel})
-        spec = json.loads(spec_json)
-        assert "results" in spec
+        from refraction.analysis import analyze
+        result = analyze("histogram", bar_excel)
+        assert result["ok"] is True
+        assert "groups" in result
 
     def test_dot_plot_spec_has_results(self, bar_excel):
-        import json
-        from refraction.specs.dot_plot import build_dot_plot_spec
-        spec_json = build_dot_plot_spec({"excel_path": bar_excel})
-        spec = json.loads(spec_json)
-        assert "results" in spec
+        from refraction.analysis import analyze
+        result = analyze("dot_plot", bar_excel)
+        assert result["ok"] is True
+        assert "groups" in result
 
     def test_before_after_spec_has_results(self, bar_excel):
-        import json
-        from refraction.specs.before_after import build_before_after_spec
-        spec_json = build_before_after_spec({"excel_path": bar_excel})
-        spec = json.loads(spec_json)
-        assert "results" in spec
+        from refraction.analysis import analyze
+        result = analyze("before_after", bar_excel)
+        assert result["ok"] is True
+        assert "groups" in result

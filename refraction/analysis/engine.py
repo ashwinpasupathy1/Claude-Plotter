@@ -153,3 +153,20 @@ def analyze(
         "x_label": x_label,
         "y_label": y_label,
     }
+
+
+_ALL_CHART_TYPES = sorted([
+    "bar", "grouped_bar", "line", "scatter",
+    "box", "violin", "heatmap", "histogram",
+    "kaplan_meier", "two_way_anova", "before_after",
+    "subcolumn_scatter", "curve_fit", "column_stats",
+    "contingency", "repeated_measures", "chi_square_gof",
+    "stacked_bar", "bubble", "dot_plot", "bland_altman",
+    "forest_plot", "area_chart", "raincloud", "qq_plot",
+    "lollipop", "waterfall", "pyramid", "ecdf",
+])
+
+
+def available_chart_types() -> list[str]:
+    """Return sorted list of all 29 supported chart type keys."""
+    return list(_ALL_CHART_TYPES)
