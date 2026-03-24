@@ -25,7 +25,7 @@ def _render_latex_image(expression: str, fontsize: int = 13):
     Returns (PIL.Image, PhotoImage-compatible) or None if rendering fails.
     """
     # LaTeX rendering removed (matplotlib dependency dropped).
-    # Returns None — wiki displays plain text instead.
+    # Wiki displays plain text instead.
     return None
 
 

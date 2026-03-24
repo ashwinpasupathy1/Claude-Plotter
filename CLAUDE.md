@@ -41,7 +41,7 @@ python3 plotter_web_server.py         # Standalone web server (no Tk)
 ./build_app.sh
 
 # Quick syntax check of all modules
-python3 -c "import plotter_functions, plotter_widgets, plotter_validators, plotter_results, plotter_registry, plotter_tabs, plotter_app_icons, plotter_presets, plotter_session, plotter_events, plotter_types, plotter_undo, plotter_errors, plotter_comparisons, plotter_project, plotter_import_pzfx, plotter_wiki_content, plotter_app_wiki, plotter_server, plotter_webview, plotter_plotly_theme, plotter_spec_bar, plotter_spec_grouped_bar, plotter_spec_line, plotter_spec_scatter, plotter_web_server, plotter_export; print('OK')"
+python3 -c "import plotter_functions, plotter_widgets, plotter_validators, plotter_results, plotter_registry, plotter_tabs, plotter_app_icons, plotter_presets, plotter_session, plotter_undo, plotter_errors, plotter_project, plotter_import_pzfx, plotter_wiki_content, plotter_app_wiki, plotter_server, plotter_webview, plotter_plotly_theme, plotter_spec_bar, plotter_spec_grouped_bar, plotter_spec_line, plotter_spec_scatter, plotter_web_server, plotter_export; print('OK')"
 ```
 
 ---
@@ -63,11 +63,8 @@ plotter_tabs.py               532 lines   Multi-tab state (TabState, TabManager,
 plotter_app_icons.py          352 lines   Sidebar icon drawing for all chart types
 plotter_presets.py            163 lines   Style preset load/save (.json)
 plotter_session.py             77 lines   Session persistence (last-used settings)
-plotter_events.py              75 lines   EventBus for decoupled pub/sub messaging
-plotter_types.py              121 lines   Shared type definitions and dataclasses
 plotter_undo.py               131 lines   UndoStack for undo/redo support
 plotter_errors.py              99 lines   ErrorReporter: structured error handling
-plotter_comparisons.py        248 lines   Custom comparison builder UI
 plotter_project.py            207 lines   .cplot project file save/open (ZIP format)
 plotter_import_pzfx.py        316 lines   GraphPad .pzfx file importer
 plotter_wiki_content.py     2,224 lines   Statistical wiki content (29 sections)
@@ -583,11 +580,8 @@ backward compatibility. All 120 tests pass.
 | `plotter_app_icons.py` | Sidebar icon drawing for all 29 chart types |
 | `plotter_presets.py` | Style preset system: load/save named presets as `.json` |
 | `plotter_session.py` | Session persistence: auto-save and restore last-used settings |
-| `plotter_events.py` | `EventBus` for decoupled pub/sub messaging between components |
-| `plotter_types.py` | Shared dataclasses and type definitions |
 | `plotter_undo.py` | `UndoStack` implementing undo/redo for plot parameter changes |
 | `plotter_errors.py` | `ErrorReporter` for structured, user-friendly error messages |
-| `plotter_comparisons.py` | Custom comparison builder: select arbitrary group pairs for stats |
 | `plotter_project.py` | `.cplot` project file save/open (ZIP archives with data + settings) |
 | `plotter_import_pzfx.py` | GraphPad Prism `.pzfx` file importer |
 | `plotter_wiki_content.py` | Statistical wiki content: 29 sections, 21 references |
@@ -620,10 +614,7 @@ backward compatibility. All 120 tests pass.
     `prism_` prefix. Comments and docstrings may still say "GraphPad Prism"
     (that's the product being emulated) but Python identifiers use `plotter_`.
 
-13. **Event bus is optional** — components don't need to use `EventBus`. It is
-    wired in but not required for rendering or stats.
-
-14. **`.cplot` files are ZIP archives** — they contain `settings.json` +
+13. **`.cplot` files are ZIP archives** — they contain `settings.json` +
     the original Excel file. Do not assume plain JSON.
 
 15. **`plotter_registry.py` is the canonical source** for `PlotTypeConfig` entries.
