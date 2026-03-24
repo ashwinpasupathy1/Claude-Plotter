@@ -1,12 +1,11 @@
 """
 test_api.py
 ===========
-FastAPI endpoint tests for all endpoints in plotter_server.py.
+FastAPI endpoint tests for the Refraction API.
 
-Covers: /health, /chart-types, /render (bar, grouped_bar, line, scatter),
-        /render-png (violin, box, histogram — spot checks), /upload.
+Covers: /health, /chart-types, /analyze, /upload.
 
-Uses TestClient from starlette.testclient. Minimum 15 tests.
+Uses TestClient from starlette.testclient.
 
 Run:
   python3 -m pytest tests/test_api.py  (or via run_all.py)
@@ -27,7 +26,7 @@ from plotter_test_harness import (
     with_excel,
 )
 
-# ── Import FastAPI app and test client ──────────────────────────────────────
+# -- Import FastAPI app and test client ----------------------------------------
 from refraction.server.api import _make_app
 
 try:
@@ -38,10 +37,10 @@ except ImportError:
 app = _make_app()
 client = TestClient(app, raise_server_exceptions=False)
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 # 1. Health endpoint
-# ═══════════════════════════════════════════════════════════════════════════
-section("API — /health endpoint")
+# ==============================================================================
+section("API -- /health endpoint")
 
 def test_health_returns_ok():
     resp = client.get("/health")
@@ -52,10 +51,10 @@ def test_health_returns_ok():
 run("/health: returns 200 and status=ok", test_health_returns_ok)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ==============================================================================
 # 2. Chart-types endpoint
-# ═══════════════════════════════════════════════════════════════════════════
-section("API — /chart-types endpoint")
+# ==============================================================================
+section("API -- /chart-types endpoint")
 
 def test_chart_types_returns_list():
     resp = client.get("/chart-types")
@@ -82,185 +81,155 @@ def test_chart_types_priority_subset():
 run("/chart-types: priority types are subset of all", test_chart_types_priority_subset)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# 3. /render — bar chart
-# ═══════════════════════════════════════════════════════════════════════════
-section("API — /render bar chart")
+# ==============================================================================
+# 3. /analyze -- bar chart
+# ==============================================================================
+section("API -- /analyze bar chart")
 
-def test_render_bar_basic():
+def test_analyze_bar_basic():
     with with_excel(lambda p: bar_excel(
             {"Control": np.array([1, 2, 3]), "Drug": np.array([4, 5, 6])}, path=p)) as xl:
-        resp = client.post("/render", json={
+        resp = client.post("/analyze", json={
             "chart_type": "bar",
-            "kw": {"excel_path": xl}
+            "excel_path": xl,
         })
         assert resp.status_code == 200
         data = resp.json()
         assert data["ok"] is True
-        assert "spec" in data
-        assert "data" in data["spec"]
-        assert "layout" in data["spec"]
+        assert "groups" in data
+        assert len(data["groups"]) == 2
 
-run("/render bar: returns valid Plotly spec", test_render_bar_basic)
+run("/analyze bar: returns groups with descriptive stats", test_analyze_bar_basic)
 
-def test_render_bar_with_title():
+def test_analyze_bar_with_title():
     with with_excel(lambda p: bar_excel(
             {"A": np.array([10, 20, 30])}, path=p)) as xl:
-        resp = client.post("/render", json={
+        resp = client.post("/analyze", json={
             "chart_type": "bar",
-            "kw": {"excel_path": xl, "title": "Test Title"}
+            "excel_path": xl,
+            "config": {"title": "Test Title"},
         })
         data = resp.json()
         assert data["ok"] is True
-        spec = data["spec"]
-        assert spec["layout"].get("title", {}).get("text", "") == "Test Title"
+        assert data["title"] == "Test Title"
 
-run("/render bar: title passed through to layout", test_render_bar_with_title)
+run("/analyze bar: title passed through", test_analyze_bar_with_title)
 
-def test_render_bar_trace_count():
+def test_analyze_bar_group_count():
     with with_excel(lambda p: bar_excel(
             {"A": np.array([1, 2]), "B": np.array([3, 4]), "C": np.array([5, 6])},
             path=p)) as xl:
-        resp = client.post("/render", json={
+        resp = client.post("/analyze", json={
             "chart_type": "bar",
-            "kw": {"excel_path": xl}
+            "excel_path": xl,
         })
         data = resp.json()
-        assert len(data["spec"]["data"]) == 3, \
-            f"Expected 3 traces, got {len(data['spec']['data'])}"
+        assert len(data["groups"]) == 3, \
+            f"Expected 3 groups, got {len(data['groups'])}"
 
-run("/render bar: 3 groups produce 3 traces", test_render_bar_trace_count)
+run("/analyze bar: 3 groups returned", test_analyze_bar_group_count)
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 4. /render — grouped_bar
-# ═══════════════════════════════════════════════════════════════════════════
-section("API — /render grouped_bar chart")
-
-def test_render_grouped_bar():
-    data_dict = {
-        "CatA": {"Sub1": [1, 2, 3], "Sub2": [4, 5, 6]},
-        "CatB": {"Sub1": [7, 8, 9], "Sub2": [10, 11, 12]},
-    }
-    with with_excel(lambda p: grouped_excel(
-            ["CatA", "CatB"], ["Sub1", "Sub2"], data_dict, path=p)) as xl:
-        resp = client.post("/render", json={
-            "chart_type": "grouped_bar",
-            "kw": {"excel_path": xl}
+def test_analyze_bar_mean_correct():
+    with with_excel(lambda p: bar_excel(
+            {"A": np.array([10, 20, 30])}, path=p)) as xl:
+        resp = client.post("/analyze", json={
+            "chart_type": "bar",
+            "excel_path": xl,
         })
-        d = resp.json()
-        assert d["ok"] is True
-        assert len(d["spec"]["data"]) >= 2
+        data = resp.json()
+        assert abs(data["groups"][0]["mean"] - 20.0) < 0.01
 
-run("/render grouped_bar: returns valid spec with traces", test_render_grouped_bar)
+run("/analyze bar: mean is correct", test_analyze_bar_mean_correct)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# 5. /render — line chart
-# ═══════════════════════════════════════════════════════════════════════════
-section("API — /render line chart")
+# ==============================================================================
+# 4. /analyze -- with stats
+# ==============================================================================
+section("API -- /analyze with statistics")
 
-def test_render_line():
-    with with_excel(lambda p: simple_xy_excel(
-            np.array([1, 2, 3, 4, 5]),
-            np.array([10, 20, 30, 40, 50]), path=p)) as xl:
-        resp = client.post("/render", json={
-            "chart_type": "line",
-            "kw": {"excel_path": xl}
+def test_analyze_bar_with_stats():
+    with with_excel(lambda p: bar_excel(
+            {"Control": np.array([1, 2, 3, 4, 5]),
+             "Drug": np.array([6, 7, 8, 9, 10])}, path=p)) as xl:
+        resp = client.post("/analyze", json={
+            "chart_type": "bar",
+            "excel_path": xl,
+            "config": {"stats_test": "parametric"},
         })
-        d = resp.json()
-        assert d["ok"] is True
-        assert d["spec"]["data"][0]["mode"] == "lines+markers"
+        data = resp.json()
+        assert data["ok"] is True
+        assert len(data["comparisons"]) >= 1
+        assert "p_value" in data["comparisons"][0]
+        assert "stars" in data["comparisons"][0]
 
-run("/render line: returns spec with lines+markers mode", test_render_line)
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 6. /render — scatter chart
-# ═══════════════════════════════════════════════════════════════════════════
-section("API — /render scatter chart")
-
-def test_render_scatter():
-    with with_excel(lambda p: simple_xy_excel(
-            np.array([1, 2, 3, 4]), np.array([2, 4, 6, 8]), path=p)) as xl:
-        resp = client.post("/render", json={
-            "chart_type": "scatter",
-            "kw": {"excel_path": xl}
-        })
-        d = resp.json()
-        assert d["ok"] is True
-        assert d["spec"]["data"][0]["mode"] == "markers"
-
-run("/render scatter: returns spec with markers mode", test_render_scatter)
+run("/analyze bar+stats: returns comparisons", test_analyze_bar_with_stats)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# 7. /render — violin, box, histogram (spot checks)
-# ═══════════════════════════════════════════════════════════════════════════
-section("API — /render distribution charts")
+# ==============================================================================
+# 5. /analyze -- distribution charts
+# ==============================================================================
+section("API -- /analyze distribution charts")
 
-def test_render_violin():
+def test_analyze_violin():
     with with_excel(lambda p: bar_excel(
             {"G1": np.random.default_rng(0).normal(5, 1, 20),
              "G2": np.random.default_rng(0).normal(8, 1, 20)}, path=p)) as xl:
-        resp = client.post("/render", json={
+        resp = client.post("/analyze", json={
             "chart_type": "violin",
-            "kw": {"excel_path": xl}
+            "excel_path": xl,
         })
         d = resp.json()
-        assert d["ok"] is True, f"violin render failed: {d}"
+        assert d["ok"] is True, f"violin analyze failed: {d}"
 
-run("/render violin: returns ok", test_render_violin)
+run("/analyze violin: returns ok", test_analyze_violin)
 
-def test_render_box():
+def test_analyze_box():
     with with_excel(lambda p: bar_excel(
             {"G1": np.array([1, 2, 3, 4, 5]),
              "G2": np.array([6, 7, 8, 9, 10])}, path=p)) as xl:
-        resp = client.post("/render", json={
+        resp = client.post("/analyze", json={
             "chart_type": "box",
-            "kw": {"excel_path": xl}
+            "excel_path": xl,
         })
         d = resp.json()
-        assert d["ok"] is True, f"box render failed: {d}"
+        assert d["ok"] is True, f"box analyze failed: {d}"
 
-run("/render box: returns ok", test_render_box)
+run("/analyze box: returns ok", test_analyze_box)
 
-def test_render_histogram():
+def test_analyze_histogram():
     with with_excel(lambda p: bar_excel(
             {"Data": np.random.default_rng(1).normal(0, 1, 50)}, path=p)) as xl:
-        resp = client.post("/render", json={
+        resp = client.post("/analyze", json={
             "chart_type": "histogram",
-            "kw": {"excel_path": xl}
+            "excel_path": xl,
         })
         d = resp.json()
-        assert d["ok"] is True, f"histogram render failed: {d}"
+        assert d["ok"] is True, f"histogram analyze failed: {d}"
 
-run("/render histogram: returns ok", test_render_histogram)
+run("/analyze histogram: returns ok", test_analyze_histogram)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# 8. /render — unknown chart type
-# ═══════════════════════════════════════════════════════════════════════════
-section("API — /render error handling")
+# ==============================================================================
+# 6. /analyze -- error handling
+# ==============================================================================
+section("API -- /analyze error handling")
 
-def test_render_unknown_chart_type():
-    resp = client.post("/render", json={
-        "chart_type": "nonexistent_chart",
-        "kw": {}
+def test_analyze_missing_file():
+    resp = client.post("/analyze", json={
+        "chart_type": "bar",
+        "excel_path": "/nonexistent/file.xlsx",
     })
     d = resp.json()
-    # Should return 400 for unknown chart types (not 500)
-    assert resp.status_code == 400
     assert d["ok"] is False
     assert "error" in d
 
-run("/render unknown type: doesn't crash server", test_render_unknown_chart_type)
+run("/analyze missing file: returns error", test_analyze_missing_file)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# 9. /upload endpoint
-# ═══════════════════════════════════════════════════════════════════════════
-section("API — /upload endpoint")
+# ==============================================================================
+# 7. /upload endpoint
+# ==============================================================================
+section("API -- /upload endpoint")
 
 def test_upload_xlsx():
     import openpyxl
@@ -281,7 +250,6 @@ def test_upload_xlsx():
         assert d["ok"] is True, f"Upload failed: {d}"
         assert "path" in d
         assert os.path.exists(d["path"])
-        # Clean up uploaded file
         os.unlink(d["path"])
     finally:
         os.unlink(tmp.name)
@@ -304,44 +272,37 @@ def test_upload_unsupported_type():
 run("/upload: .txt file rejected", test_upload_unsupported_type)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# 10. Additional /render chart types
-# ═══════════════════════════════════════════════════════════════════════════
-section("API — /render additional chart types")
+# ==============================================================================
+# 8. /analyze -- SEM accuracy
+# ==============================================================================
+section("API -- /analyze SEM accuracy")
 
-def test_render_heatmap():
-    matrix = np.array([[1.0, 2.0], [3.0, 4.0]])
-    with with_excel(lambda p: heatmap_excel(
-            matrix, ["R1", "R2"], ["C1", "C2"], path=p)) as xl:
-        resp = client.post("/render", json={
-            "chart_type": "heatmap",
-            "kw": {"excel_path": xl}
+def test_analyze_sem_matches_scipy():
+    from scipy import stats as scipy_stats
+    vals_a = np.array([2.0, 4.0, 6.0, 8.0, 10.0])
+    vals_b = np.array([1.0, 3.0, 5.0, 7.0, 9.0])
+    expected_sem_a = scipy_stats.sem(vals_a)
+    expected_sem_b = scipy_stats.sem(vals_b)
+
+    with with_excel(lambda p: bar_excel({"A": vals_a, "B": vals_b}, path=p)) as xl:
+        resp = client.post("/analyze", json={
+            "chart_type": "bar",
+            "excel_path": xl,
+            "config": {"error_type": "sem"},
         })
-        d = resp.json()
-        assert d["ok"] is True, f"heatmap render failed: {d}"
+        data = resp.json()
+        actual_sem_a = data["groups"][0]["sem"]
+        actual_sem_b = data["groups"][1]["sem"]
+        assert abs(actual_sem_a - expected_sem_a) < 1e-10, \
+            f"SEM mismatch: got {actual_sem_a}, expected {expected_sem_a}"
+        assert abs(actual_sem_b - expected_sem_b) < 1e-10, \
+            f"SEM mismatch: got {actual_sem_b}, expected {expected_sem_b}"
 
-run("/render heatmap: returns ok", test_render_heatmap)
-
-def test_render_kaplan_meier():
-    km_data = {
-        "Control": {"time": np.array([1, 2, 3, 4, 5]),
-                     "event": np.array([1, 1, 0, 1, 0])},
-        "Treatment": {"time": np.array([2, 3, 4, 5, 6]),
-                       "event": np.array([1, 0, 1, 0, 1])},
-    }
-    with with_excel(lambda p: km_excel(km_data, path=p)) as xl:
-        resp = client.post("/render", json={
-            "chart_type": "kaplan_meier",
-            "kw": {"excel_path": xl}
-        })
-        d = resp.json()
-        assert d["ok"] is True, f"kaplan_meier render failed: {d}"
-
-run("/render kaplan_meier: returns ok", test_render_kaplan_meier)
+run("/analyze bar: SEM matches scipy.stats.sem", test_analyze_sem_matches_scipy)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 # Summary
-# ─────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
 summarise()
 sys.exit(0 if _h.FAIL == 0 else 1)

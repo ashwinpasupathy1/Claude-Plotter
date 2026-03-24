@@ -1,4 +1,4 @@
-"""Phase 3 — Plotly spec builder tests."""
+"""Analysis engine tests -- replaces legacy Plotly spec builder tests."""
 
 import sys, os, json, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -8,111 +8,150 @@ from plotter_test_harness import run, section, bar_excel, simple_xy_excel
 import numpy as np
 
 # ===================================================================
-# Phase 3: Plotly spec builders
+# Analysis engine -- bar
 # ===================================================================
 
-section("Phase 3: Plotly spec builders — bar")
+section("Analysis engine: bar chart analysis")
 
-def test_bar_spec_returns_json():
+def test_bar_analysis_returns_groups():
     xl = bar_excel({"Control": np.array([1,2,3]), "Drug": np.array([4,5,6])})
     try:
-        from refraction.specs.bar import build_bar_spec
-        spec_json = build_bar_spec({"excel_path": xl, "title": "Test"})
-        spec = json.loads(spec_json)
-        assert "data" in spec, "Missing 'data' key"
-        assert "layout" in spec, "Missing 'layout' key"
+        from refraction.analysis import analyze
+        result = analyze("bar", xl, {"title": "Test"})
+        assert result["ok"] is True
+        assert "groups" in result
+        assert len(result["groups"]) == 2
+        assert result["title"] == "Test"
     finally:
         os.unlink(xl)
-run("plotter_spec_bar: returns valid Plotly JSON", test_bar_spec_returns_json)
+run("analysis engine: bar returns groups", test_bar_analysis_returns_groups)
 
 
-def test_bar_spec_has_two_traces():
+def test_bar_analysis_has_two_groups():
     xl = bar_excel({"Control": np.array([1,2,3]), "Drug": np.array([4,5,6])})
     try:
-        from refraction.specs.bar import build_bar_spec
-        spec = json.loads(build_bar_spec({"excel_path": xl}))
-        assert len(spec["data"]) == 2, f"Expected 2 traces, got {len(spec['data'])}"
+        from refraction.analysis import analyze
+        result = analyze("bar", xl)
+        assert len(result["groups"]) == 2, f"Expected 2, got {len(result['groups'])}"
     finally:
         os.unlink(xl)
-run("plotter_spec_bar: two groups = two traces", test_bar_spec_has_two_traces)
+run("analysis engine: two groups = two entries", test_bar_analysis_has_two_groups)
 
 
-def test_bar_spec_means_correct():
+def test_bar_analysis_means_correct():
     xl = bar_excel({"A": np.array([10, 20, 30])})
     try:
-        from refraction.specs.bar import build_bar_spec
-        spec = json.loads(build_bar_spec({"excel_path": xl}))
-        assert abs(spec["data"][0]["y"][0] - 20.0) < 0.01
+        from refraction.analysis import analyze
+        result = analyze("bar", xl)
+        assert abs(result["groups"][0]["mean"] - 20.0) < 0.01
     finally:
         os.unlink(xl)
-run("plotter_spec_bar: mean is correct", test_bar_spec_means_correct)
+run("analysis engine: mean is correct", test_bar_analysis_means_correct)
 
 
-section("Phase 3: Plotly spec builders — line")
+# ===================================================================
+# Analysis engine -- statistics
+# ===================================================================
 
-def test_line_spec_returns_json():
-    xl = simple_xy_excel(np.array([1,2,3]), np.array([4,5,6]), "X", "Y1")
+section("Analysis engine: statistical comparisons")
+
+def test_bar_analysis_with_stats():
+    xl = bar_excel({"Control": np.array([1,2,3,4,5]),
+                    "Drug": np.array([10,11,12,13,14])})
     try:
-        from refraction.specs.line import build_line_spec
-        spec = json.loads(build_line_spec({"excel_path": xl}))
-        assert "data" in spec
+        from refraction.analysis import analyze
+        result = analyze("bar", xl, {"stats_test": "parametric"})
+        assert result["ok"] is True
+        assert len(result["comparisons"]) >= 1
+        assert "p_value" in result["comparisons"][0]
+        assert "stars" in result["comparisons"][0]
     finally:
         os.unlink(xl)
-run("plotter_spec_line: returns valid Plotly JSON", test_line_spec_returns_json)
+run("analysis engine: parametric stats returns comparisons", test_bar_analysis_with_stats)
 
 
-def test_line_spec_mode():
-    xl = simple_xy_excel(np.array([1,2,3]), np.array([4,5,6]))
+def test_bar_analysis_no_stats():
+    xl = bar_excel({"A": np.array([1,2,3])})
     try:
-        from refraction.specs.line import build_line_spec
-        spec = json.loads(build_line_spec({"excel_path": xl}))
-        assert spec["data"][0]["mode"] == "lines+markers"
+        from refraction.analysis import analyze
+        result = analyze("bar", xl, {"stats_test": "none"})
+        assert result["ok"] is True
+        assert result["comparisons"] == []
     finally:
         os.unlink(xl)
-run("plotter_spec_line: mode is lines+markers", test_line_spec_mode)
+run("analysis engine: stats_test=none returns empty comparisons", test_bar_analysis_no_stats)
 
 
-section("Phase 3: Plotly spec builders — scatter")
+# ===================================================================
+# Analysis engine -- descriptive statistics
+# ===================================================================
 
-def test_scatter_spec_returns_json():
-    xl = simple_xy_excel(np.array([1,2,3]), np.array([4,5,6]))
+section("Analysis engine: descriptive statistics")
+
+def test_group_has_all_stats():
+    xl = bar_excel({"A": np.array([2.0, 4.0, 6.0, 8.0, 10.0])})
     try:
-        from refraction.specs.scatter import build_scatter_spec
-        spec = json.loads(build_scatter_spec({"excel_path": xl}))
-        assert "data" in spec
+        from refraction.analysis import analyze
+        result = analyze("bar", xl)
+        g = result["groups"][0]
+        for key in ("name", "values", "mean", "median", "sd", "sem", "ci95", "n", "color"):
+            assert key in g, f"Missing key: {key}"
+        assert g["n"] == 5
+        assert abs(g["mean"] - 6.0) < 0.01
+        assert abs(g["median"] - 6.0) < 0.01
     finally:
         os.unlink(xl)
-run("plotter_spec_scatter: returns valid Plotly JSON", test_scatter_spec_returns_json)
+run("analysis engine: group has all stat fields", test_group_has_all_stats)
 
 
-def test_scatter_spec_mode_markers():
-    xl = simple_xy_excel(np.array([1,2,3]), np.array([4,5,6]))
+# ===================================================================
+# SEM accuracy -- verifies sample variance (n-1), not population (n)
+# ===================================================================
+
+section("Analysis engine: SEM calculation accuracy")
+
+def test_sem_matches_scipy():
+    """SEM should match scipy.stats.sem (which uses ddof=1)."""
+    from scipy import stats as scipy_stats
+    vals_a = np.array([2.0, 4.0, 6.0, 8.0, 10.0])
+    vals_b = np.array([1.0, 3.0, 5.0, 7.0, 9.0])
+    expected_sem_a = scipy_stats.sem(vals_a)
+    expected_sem_b = scipy_stats.sem(vals_b)
+
+    xl = bar_excel({"A": vals_a, "B": vals_b})
     try:
-        from refraction.specs.scatter import build_scatter_spec
-        spec = json.loads(build_scatter_spec({"excel_path": xl}))
-        assert spec["data"][0]["mode"] == "markers"
+        from refraction.analysis import analyze
+        result = analyze("bar", xl, {"error_type": "sem"})
+        actual_sem_a = result["groups"][0]["sem"]
+        actual_sem_b = result["groups"][1]["sem"]
+        assert abs(actual_sem_a - expected_sem_a) < 1e-10, \
+            f"SEM mismatch: got {actual_sem_a}, expected {expected_sem_a}"
+        assert abs(actual_sem_b - expected_sem_b) < 1e-10, \
+            f"SEM mismatch: got {actual_sem_b}, expected {expected_sem_b}"
     finally:
         os.unlink(xl)
-run("plotter_spec_scatter: mode is markers", test_scatter_spec_mode_markers)
+run("analysis engine: SEM matches scipy.stats.sem (sample variance)", test_sem_matches_scipy)
 
 
-section("Phase 3: Plotly theme")
+# ===================================================================
+# Error handling
+# ===================================================================
 
-def test_theme_palette_length():
-    from refraction.specs.theme import PRISM_PALETTE
-    assert len(PRISM_PALETTE) == 10
-run("plotter_plotly_theme: palette has 10 colors", test_theme_palette_length)
+section("Analysis engine: error handling")
 
-
-def test_theme_template_structure():
-    from refraction.specs.theme import PRISM_TEMPLATE
-    assert "layout" in PRISM_TEMPLATE
-    assert "xaxis" in PRISM_TEMPLATE["layout"]
-    assert "yaxis" in PRISM_TEMPLATE["layout"]
-run("plotter_plotly_theme: template has expected structure", test_theme_template_structure)
+def test_missing_file():
+    from refraction.analysis import analyze
+    result = analyze("bar", "/nonexistent/file.xlsx")
+    assert result["ok"] is False
+    assert "error" in result
+run("analysis engine: missing file returns error", test_missing_file)
 
 
-section("Phase 3: FastAPI server")
+# ===================================================================
+# FastAPI server
+# ===================================================================
+
+section("FastAPI server: health endpoint")
 
 def test_server_starts():
     from refraction.server.api import start_server, get_port
@@ -124,125 +163,56 @@ def test_server_starts():
         assert resp.status == 200
     except Exception as e:
         assert False, f"Server did not start: {e}"
-run("plotter_server: /health endpoint responds", test_server_starts)
+run("server: /health endpoint responds", test_server_starts)
 
 
-def test_server_render_endpoint():
+def test_server_analyze_endpoint():
     from refraction.server.api import get_port
     import urllib.request
     xl = bar_excel({"A": np.array([1,2,3]), "B": np.array([4,5,6])})
     try:
-        payload = json.dumps({"chart_type": "bar", "kw": {"excel_path": xl}}).encode()
+        payload = json.dumps({
+            "chart_type": "bar",
+            "excel_path": xl,
+        }).encode()
         req = urllib.request.Request(
-            f"http://127.0.0.1:{get_port()}/render",
+            f"http://127.0.0.1:{get_port()}/analyze",
             data=payload,
             headers={"Content-Type": "application/json"},
             method="POST",
         )
         resp = urllib.request.urlopen(req, timeout=5)
         data = json.loads(resp.read())
-        assert data["ok"] is True, f"Render failed: {data}"
-        assert "spec" in data
+        assert data["ok"] is True, f"Analyze failed: {data}"
+        assert "groups" in data
     finally:
         os.unlink(xl)
-run("plotter_server: /render returns Plotly spec", test_server_render_endpoint)
+run("server: /analyze returns analysis result", test_server_analyze_endpoint)
 
 
 # ===================================================================
-# SEM accuracy test — verifies sample variance (n-1), not population (n)
+# Config key compatibility
 # ===================================================================
 
-section("Phase 3: SEM calculation accuracy")
+section("Analysis engine: config key compatibility")
 
-def test_bar_spec_sem_matches_scipy():
-    """SEM in bar spec should match scipy.stats.sem (which uses ddof=1)."""
-    from scipy import stats as scipy_stats
-    vals_a = np.array([2.0, 4.0, 6.0, 8.0, 10.0])
-    vals_b = np.array([1.0, 3.0, 5.0, 7.0, 9.0])
-    expected_sem_a = scipy_stats.sem(vals_a)  # uses ddof=1 by default
-    expected_sem_b = scipy_stats.sem(vals_b)
-
-    xl = bar_excel({"A": vals_a, "B": vals_b})
+def test_xlabel_alias():
+    """Both x_label and xlabel should work."""
+    xl = bar_excel({"A": np.array([1,2,3])})
     try:
-        from refraction.specs.bar import build_bar_spec
-        spec = json.loads(build_bar_spec({"excel_path": xl}))
-        actual_sem_a = spec["data"][0]["error_y"]["array"][0]
-        actual_sem_b = spec["data"][1]["error_y"]["array"][0]
-        assert abs(actual_sem_a - expected_sem_a) < 1e-10, \
-            f"SEM mismatch: got {actual_sem_a}, expected {expected_sem_a}"
-        assert abs(actual_sem_b - expected_sem_b) < 1e-10, \
-            f"SEM mismatch: got {actual_sem_b}, expected {expected_sem_b}"
+        from refraction.analysis import analyze
+        r1 = analyze("bar", xl, {"xlabel": "Foo"})
+        assert r1["x_label"] == "Foo"
+        r2 = analyze("bar", xl, {"x_label": "Bar"})
+        assert r2["x_label"] == "Bar"
     finally:
         os.unlink(xl)
-run("plotter_spec_bar: SEM matches scipy.stats.sem (sample variance)", test_bar_spec_sem_matches_scipy)
+run("analysis engine: xlabel/x_label aliases work", test_xlabel_alias)
 
 
-# ===================================================================
-# NaN handling in scatter/line — should not crash or misalign arrays
-# ===================================================================
-
-section("Phase 3: NaN handling in scatter/line")
-
-def test_scatter_with_nan():
-    """Scatter spec should handle NaN values without crashing."""
-    import pandas as pd, tempfile
-    df = pd.DataFrame({"X": [1, 2, 3, 4, 5], "Y": [10, np.nan, 30, np.nan, 50]})
-    tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
-    df.to_excel(tmp.name, index=False)
-    tmp.close()
-    try:
-        from refraction.specs.scatter import build_scatter_spec
-        spec_json = build_scatter_spec({"excel_path": tmp.name})
-        spec = json.loads(spec_json)
-        assert "data" in spec, "Missing data key"
-        # X and Y arrays should be the same length (NaN rows dropped)
-        x_len = len(spec["data"][0]["x"])
-        y_len = len(spec["data"][0]["y"])
-        assert x_len == y_len, f"Array mismatch: x={x_len}, y={y_len}"
-        assert x_len == 3, f"Expected 3 non-NaN pairs, got {x_len}"
-    finally:
-        os.unlink(tmp.name)
-run("plotter_spec_scatter: NaN rows dropped, arrays aligned", test_scatter_with_nan)
-
-def test_line_with_nan():
-    """Line spec should handle NaN values without crashing."""
-    import pandas as pd, tempfile
-    df = pd.DataFrame({"X": [1, 2, 3, 4], "Y1": [10, np.nan, 30, 40]})
-    tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
-    df.to_excel(tmp.name, index=False)
-    tmp.close()
-    try:
-        from refraction.specs.line import build_line_spec
-        spec_json = build_line_spec({"excel_path": tmp.name})
-        spec = json.loads(spec_json)
-        x_len = len(spec["data"][0]["x"])
-        y_len = len(spec["data"][0]["y"])
-        assert x_len == y_len, f"Array mismatch: x={x_len}, y={y_len}"
-        assert x_len == 3, f"Expected 3 non-NaN pairs, got {x_len}"
-    finally:
-        os.unlink(tmp.name)
-run("plotter_spec_line: NaN rows dropped, arrays aligned", test_line_with_nan)
-
-
-# ===================================================================
-# Open-spine styling — verify template includes mirror: false
-# ===================================================================
-
-section("Phase 3: Open-spine styling in template")
-
-def test_template_has_open_spine():
-    """PRISM_TEMPLATE should have mirror=False for open-spine styling."""
-    from refraction.specs.theme import PRISM_TEMPLATE
-    xaxis = PRISM_TEMPLATE["layout"]["xaxis"]
-    yaxis = PRISM_TEMPLATE["layout"]["yaxis"]
-    assert xaxis.get("mirror") is False, "xaxis should have mirror=False"
-    assert yaxis.get("mirror") is False, "yaxis should have mirror=False"
-run("plotter_plotly_theme: template has open-spine (mirror=False)", test_template_has_open_spine)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
+# -------------------------------------------------------------------
 # Final summary
-# ─────────────────────────────────────────────────────────────────────────────
+# -------------------------------------------------------------------
 
 _h.summarise()
 sys.exit(0 if _h.FAIL == 0 else 1)

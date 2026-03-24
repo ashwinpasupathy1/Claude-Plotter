@@ -1,26 +1,25 @@
 #!/usr/bin/env python3
-"""Refraction — Web Server
+"""Refraction -- API server entry point.
 
-Starts the FastAPI server serving the React SPA and chart API.
-Does NOT require a display or Tkinter.
+Starts the FastAPI server that exposes /analyze, /upload, /health,
+and /chart-types.
 
 Usage:
-    python3 plotter_web_server.py [--port PORT] [--host HOST]
-    PLOTTER_API_KEY=secret python3 plotter_web_server.py
+    python3 -m refraction.server.web_entry [--port PORT] [--host HOST]
+    REFRACTION_API_KEY=secret python3 -m refraction.server.web_entry
 
 Environment variables:
-    PLOTTER_API_KEY  — API key for non-local requests (optional)
-    PORT             — Server port (default: 7331)
-    HOST             — Bind address (default: 0.0.0.0)
+    REFRACTION_API_KEY  -- API key for non-local requests (optional)
+    PORT                -- Server port (default: 7331)
+    HOST                -- Bind address (default: 0.0.0.0)
 """
 
 import os
-import sys
 import argparse
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Refraction Web Server")
+    parser = argparse.ArgumentParser(description="Refraction API Server")
     parser.add_argument("--port", type=int,
                         default=int(os.environ.get("PORT", 7331)))
     parser.add_argument("--host",
@@ -29,9 +28,9 @@ def main():
                         help="Enable hot reload")
     args = parser.parse_args()
 
-    print(f"Refraction Web Server")
+    print(f"Refraction API Server")
     print(f"Listening on http://{args.host}:{args.port}")
-    if os.environ.get("PLOTTER_API_KEY"):
+    if os.environ.get("REFRACTION_API_KEY"):
         print("API key authentication enabled")
 
     import uvicorn
