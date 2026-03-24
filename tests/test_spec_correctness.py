@@ -55,16 +55,16 @@ run("bar: 3 groups produce correct means", test_bar_means_three_groups)
 
 def test_bar_sem_calculation():
     """Verify SEM calculation for known data."""
-    # Data: [10, 20, 30], mean=20, population_std=8.165, SEM=8.165/sqrt(3)=4.714
-    # Note: bar.py uses population std (divides by n, not n-1)
+    # Data: [10, 20, 30], mean=20, sample_std=10.0, SEM=10.0/sqrt(3)=5.7735
+    # Uses sample std (ddof=1)
     with with_excel(lambda p: bar_excel(
             {"A": np.array([10.0, 20.0, 30.0])}, path=p)) as xl:
         from refraction.specs.bar import build_bar_spec
         spec = json.loads(build_bar_spec({"excel_path": xl}))
         sem_value = spec["data"][0]["error_y"]["array"][0]
-        # Population std = sqrt(((10-20)^2 + (20-20)^2 + (30-20)^2) / 3) = sqrt(200/3)
-        # SEM = pop_std / sqrt(3) = sqrt(200/3) / sqrt(3) = sqrt(200/9) = sqrt(22.222) = 4.714
-        expected_sem = (200.0 / 3.0) ** 0.5 / (3.0 ** 0.5)
+        # Sample std (ddof=1) = sqrt(((10-20)^2 + (20-20)^2 + (30-20)^2) / 2) = sqrt(100) = 10
+        # SEM = sample_std / sqrt(3) = 10 / sqrt(3) = 5.7735
+        expected_sem = 10.0 / (3.0 ** 0.5)
         assert abs(sem_value - expected_sem) < 0.01, \
             f"SEM: expected {expected_sem:.4f}, got {sem_value:.4f}"
 
@@ -559,5 +559,6 @@ run("grouped bar: barmode is 'group'", test_grouped_bar_barmode)
 # ─────────────────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────────────────
-summarise()
-sys.exit(0 if _h.FAIL == 0 else 1)
+if __name__ == "__main__":
+    summarise()
+    sys.exit(0 if _h.FAIL == 0 else 1)

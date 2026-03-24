@@ -357,5 +357,6 @@ run("JSON validity: spec survives parse/serialize roundtrip", test_spec_json_rou
 # ─────────────────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────────────────
-summarise()
-sys.exit(0 if _h.FAIL == 0 else 1)
+if __name__ == "__main__":
+    summarise()
+    sys.exit(0 if _h.FAIL == 0 else 1)

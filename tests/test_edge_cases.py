@@ -456,5 +456,6 @@ run("heatmap: 1x1 matrix works", test_heatmap_single_cell)
 # ─────────────────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────────────────
-summarise()
-sys.exit(0 if _h.FAIL == 0 else 1)
+if __name__ == "__main__":
+    summarise()
+    sys.exit(0 if _h.FAIL == 0 else 1)

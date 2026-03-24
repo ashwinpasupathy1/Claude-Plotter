@@ -139,7 +139,9 @@ def _make_app():
         try:
             from refraction.analysis import analyze
             data_path = req.data_path or req.config.get("excel_path", "")
-            spec = analyze(data_path, req.chart_type, req.config)
+            kw = dict(req.config)
+            kw["excel_path"] = data_path
+            spec = analyze(req.chart_type, kw)
             return {"ok": True, "spec": spec}
         except Exception as e:
             return {"ok": False, "error": str(e)}

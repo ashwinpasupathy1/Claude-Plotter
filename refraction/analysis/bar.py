@@ -11,7 +11,7 @@ import numpy as np
 
 from refraction.analysis.schema import AxisSpec, ChartSpec, StyleSpec
 from refraction.analysis.helpers import read_data, resolve_colors, extract_config
-from refraction.analysis.stats_annotator import build_stats_brackets
+from refraction.analysis.stats_annotator import build_stats_brackets, check_normality, _cohens_d
 
 
 def _calc_error(vals: list[float], error_type: str) -> float:
@@ -19,17 +19,27 @@ def _calc_error(vals: list[float], error_type: str) -> float:
     if len(vals) < 2:
         return 0.0
     arr = np.array(vals)
-    if error_type == "sd":
+    et = error_type.lower() if isinstance(error_type, str) else "sem"
+    if et == "sd":
         return float(np.std(arr, ddof=1))
-    if error_type == "ci95":
+    if et == "ci95":
         se = float(np.std(arr, ddof=1) / np.sqrt(len(arr)))
-        return se * 1.96
+        try:
+            from scipy.stats import t as t_dist
+            t_crit = float(t_dist.ppf(0.975, df=len(arr) - 1))
+        except ImportError:
+            t_crit = 1.96
+        return se * t_crit
     # default: SEM
     return float(np.std(arr, ddof=1) / np.sqrt(len(arr)))
 
 
-def analyze_bar(kw: dict) -> ChartSpec:
+def analyze_bar(kw_or_path=None, **kwargs) -> ChartSpec:
     """Analyze bar chart data and return a ChartSpec.
+
+    Accepts either a dict of kwargs or a path string plus keyword args:
+        analyze_bar({"excel_path": "...", "error_type": "sem"})
+        analyze_bar("/path/to/data.xlsx", error_type="sem")
 
     Data payload keys:
         groups: list[str] — group names
@@ -38,6 +48,13 @@ def analyze_bar(kw: dict) -> ChartSpec:
         error_type: str — "sem", "sd", or "ci95"
         raw_points: list[list[float]] | None — per-group raw values
     """
+    if isinstance(kw_or_path, str):
+        kw = {"excel_path": kw_or_path, **kwargs}
+    elif kw_or_path is None:
+        kw = kwargs
+    else:
+        kw = dict(kw_or_path)
+        kw.update(kwargs)
     cfg = extract_config(kw)
     df = read_data(cfg["excel_path"], cfg["sheet"])
 
@@ -45,23 +62,54 @@ def analyze_bar(kw: dict) -> ChartSpec:
     values = {g: df[g].dropna().astype(float).tolist() for g in groups}
     colors = resolve_colors(cfg["color"], len(groups))
 
-    means = []
-    errors = []
-    for g in groups:
+    group_data = []
+    for i, g in enumerate(groups):
         vals = values[g]
         m = float(np.mean(vals)) if vals else 0.0
-        means.append(m)
-        errors.append(_calc_error(vals, cfg["error_type"]))
+        err = _calc_error(vals, cfg["error_type"])
+        entry: dict = {
+            "name": g,
+            "mean": m,
+            "error": err,
+            "n": len(vals),
+            "color": colors[i],
+        }
+        if cfg["show_points"]:
+            entry["raw_points"] = vals
+        group_data.append(entry)
 
-    # Optional raw points
-    raw_points = None
-    if cfg["show_points"]:
-        raw_points = [values[g] for g in groups]
+    # Stats
+    raw_test = cfg["stats_test"] or ""
+    # Map "parametric" to appropriate test based on group count
+    if raw_test.lower() == "parametric":
+        stats_test = "t-test" if len(groups) == 2 else "anova"
+    else:
+        stats_test = raw_test
 
-    # Stats brackets
     brackets = build_stats_brackets(
-        values, cfg["stats_test"], cfg["posthoc"], cfg["correction"]
+        values, stats_test, cfg["posthoc"], cfg["correction"]
     )
+
+    # Normality and effect sizes when stats requested
+    normality_data = None
+    if stats_test:
+        normality_data = []
+        for g in groups:
+            is_normal, p = check_normality(values[g])
+            normality_data.append({"group": g, "is_normal": is_normal, "p": p})
+        # Add effect sizes to brackets
+        for br in brackets:
+            a_vals = values.get(br.group_a, [])
+            b_vals = values.get(br.group_b, [])
+            if a_vals and b_vals:
+                br.effect_size = _cohens_d(a_vals, b_vals)  # type: ignore[attr-defined]
+
+    chart_data: dict = {
+        "groups": group_data,
+        "error_type": cfg["error_type"],
+    }
+    if normality_data is not None:
+        chart_data["normality"] = normality_data
 
     return ChartSpec(
         chart_type="bar",
@@ -82,12 +130,6 @@ def analyze_bar(kw: dict) -> ChartSpec:
             axis_style=cfg["axis_style"],
             gridlines=cfg["gridlines"],
         ),
-        data={
-            "groups": groups,
-            "means": means,
-            "errors": errors,
-            "error_type": cfg["error_type"],
-            "raw_points": raw_points,
-        },
+        data=chart_data,
         stats=brackets,
     )

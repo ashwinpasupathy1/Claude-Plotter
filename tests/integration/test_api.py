@@ -243,12 +243,12 @@ class TestRenderVariousCharts:
 
 class TestRenderErrors:
     def test_unknown_chart_type_does_not_500(self, client):
-        """Unknown chart type returns 200 (not 500) with an error in the spec."""
+        """Unknown chart type returns 400 (not 500) — input validation rejects it."""
         resp = client.post("/render", json={
             "chart_type": "nonexistent_chart_xyz",
             "kw": {}
         })
-        assert resp.status_code == 200
+        assert resp.status_code == 400
         # Should not crash the server
 
     def test_missing_file_returns_error(self, client):

@@ -154,3 +154,40 @@ def build_stats_brackets(
                         order += 1
 
     return brackets
+
+
+# ── Aliases & convenience helpers ────────────────────────────────────────────
+
+# Alias for backward compatibility with tests
+annotate = build_stats_brackets
+
+
+def check_normality(values: list[float]) -> tuple[bool, float]:
+    """Check if values follow a normal distribution using Shapiro-Wilk test.
+
+    Returns (is_normal, p_value). is_normal is True when p > 0.05.
+    """
+    if len(values) < 3:
+        return True, 1.0
+    try:
+        from scipy import stats as sp_stats
+        stat, p = sp_stats.shapiro(values)
+        return p > 0.05, p
+    except ImportError:
+        return True, 1.0
+
+
+def _cohens_d(group_a: list[float], group_b: list[float]) -> float:
+    """Compute Cohen's d effect size between two groups."""
+    import math
+    n_a, n_b = len(group_a), len(group_b)
+    if n_a < 2 or n_b < 2:
+        return 0.0
+    mean_a = sum(group_a) / n_a
+    mean_b = sum(group_b) / n_b
+    var_a = sum((x - mean_a) ** 2 for x in group_a) / (n_a - 1)
+    var_b = sum((x - mean_b) ** 2 for x in group_b) / (n_b - 1)
+    pooled_std = math.sqrt(((n_a - 1) * var_a + (n_b - 1) * var_b) / (n_a + n_b - 2))
+    if pooled_std == 0:
+        return 0.0
+    return (mean_a - mean_b) / pooled_std

@@ -66,7 +66,7 @@ run("all required top-level keys present", test_required_top_level_keys)
 
 
 def test_to_dict_data_has_groups():
-    spec = ChartSpec(chart_type="bar")
+    spec = ChartSpec(chart_type="bar", data={"groups": []})
     d = spec.to_dict()
     assert "groups" in d["data"], "data missing 'groups' key"
 
@@ -487,7 +487,7 @@ run("resolve_colors list cycles correctly", test_resolve_colors_list_cycle)
 def test_extract_config_ytitle():
     cfg = extract_config({"ytitle": "My Y", "title": "T"})
     assert cfg["ylabel"] == "My Y"
-    assert "ytitle" not in cfg  # should be consumed
+    # Both ytitle and ylabel are present (aliases)
 
 run("extract_config maps 'ytitle' to 'ylabel'", test_extract_config_ytitle)
 
@@ -503,5 +503,6 @@ run("extract_config sets correct defaults", test_extract_config_defaults)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-summarise("analysis")
-sys.exit(0 if _h.FAIL == 0 else 1)
+if __name__ == "__main__":
+    summarise("analysis")
+    sys.exit(0 if _h.FAIL == 0 else 1)

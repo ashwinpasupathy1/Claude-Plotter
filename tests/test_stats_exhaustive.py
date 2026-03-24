@@ -1445,5 +1445,6 @@ run("14a. _p_to_stars: all boundary values correct", test_p_to_stars_all_boundar
 # ─────────────────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────────────────
-summarise("stats_exhaustive")
-sys.exit(0 if _h.FAIL == 0 else 1)
+if __name__ == "__main__":
+    summarise("stats_exhaustive")
+    sys.exit(0 if _h.FAIL == 0 else 1)

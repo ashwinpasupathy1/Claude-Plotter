@@ -20,6 +20,8 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_HERE)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
 
 from refraction.core import chart_helpers as pf  # noqa: E402
 
