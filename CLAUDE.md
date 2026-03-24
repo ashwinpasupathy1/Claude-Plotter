@@ -19,13 +19,14 @@ before doing anything else.
 ## Commands
 
 ```bash
-# Run the full test suite (4 suites, ~3 seconds)
+# Run the full test suite (5 suites, ~30 seconds)
 python3 run_all.py
 
 # Run a single suite
-python3 run_all.py stats              #  57 tests — statistical verification + control logic
+python3 run_all.py comprehensive      # 0 tests — all chart types + stats engine
+python3 run_all.py stats              #  56 tests — statistical verification + control logic
 python3 run_all.py validators         #  35 tests — spreadsheet validators
-python3 run_all.py specs              #  11 tests — Plotly spec builders + server (needs plotly)
+python3 run_all.py specs              #  11+ tests — Plotly spec builders + server (needs plotly)
 python3 run_all.py api                #  18 tests — FastAPI endpoint tests
 
 # Launch the app
@@ -49,20 +50,12 @@ python3 -c "import plotter_functions, plotter_widgets, plotter_validators, plott
 
 ```
 # ── Core application ──────────────────────────────────────────────
-plotter_barplot_app.py      2,922 lines   App class, sidebar, all UI wiring
-plotter_functions.py            8 lines   Re-export shim (imports from plotter_chart_helpers)
-plotter_chart_helpers.py    1,135 lines   Statistical helpers, effect sizes, post-hoc tests
+plotter_barplot_app.py      2,900 lines   App class, sidebar, all UI wiring
+plotter_functions.py        8 lines   29 matplotlib chart functions + stats
 plotter_widgets.py            952 lines   _DS tokens, PButton/PEntry/PCheckbox etc.
 plotter_validators.py         528 lines   Standalone spreadsheet validators
 plotter_results.py            405 lines   Results panel: populate / export / copy
-plotter_export.py             172 lines   Journal export presets (Nature/Science/Cell) + kaleido
-
-# ── App mixins (extracted from plotter_barplot_app.py) ─────────────
-plotter_app_execution.py    1,447 lines   Plot rendering pipeline (ExecutionMixin)
-plotter_app_file_io.py        791 lines   File I/O operations (FileIOMixin)
-plotter_app_validators.py     625 lines   Spreadsheet validation (ValidationMixin)
-plotter_app_collect.py        229 lines   Parameter collection from UI (CollectMixin)
-plotter_stats_tabs.py         757 lines   Statistics tab UI builders (StatsTabMixin)
+plotter_export.py             170 lines   Journal export presets (Nature/Science/Cell) + kaleido
 
 # ── Phase 2 infrastructure modules ────────────────────────────────
 plotter_registry.py           475 lines   PlotTypeConfig registry (29 entries)
@@ -80,9 +73,8 @@ plotter_app_wiki.py           522 lines   Wiki popup viewer (Tk UI)
 # ── Phase 3 — Plotly / FastAPI / Web ──────────────────────────────
 plotter_server.py             183 lines   FastAPI server + auth + endpoints
 plotter_webview.py            179 lines   pywebview wrapper for desktop mode
-plotter_plotly_theme.py        51 lines   Plotly theme constants (PRISM_TEMPLATE, PRISM_PALETTE)
-plotter_spec_helpers.py        48 lines   Shared spec builder helpers (read_excel, resolve_colors)
-plotter_spec_bar.py            51 lines   Bar chart Plotly spec builder
+plotter_plotly_theme.py        51 lines   Plotly theme constants (PRISM_TEMPLATE)
+plotter_spec_bar.py            67 lines   Bar chart Plotly spec builder
 plotter_spec_grouped_bar.py    57 lines   Grouped bar Plotly spec builder
 plotter_spec_line.py           55 lines   Line graph Plotly spec builder
 plotter_spec_scatter.py        58 lines   Scatter plot Plotly spec builder
@@ -149,37 +141,36 @@ docs/archive/phase4/                      Phase 4 development notes
 
 ### Rendering pipeline
 
-All 29 chart types have Plotly spec builders. Plotly.js is the sole rendering
-engine for both desktop (pywebview) and web (browser) modes. Export to
-PNG/SVG/PDF uses kaleido.
+All 29 chart types now have Plotly spec builders, making Plotly.js the primary
+interactive rendering path for both desktop (pywebview) and web (browser) modes.
+The matplotlib/PNG path is retained as a true fallback for offline export and
+environments where Plotly is unavailable.
 
 ```
 User clicks "Generate Plot"
     ↓
 App._run()  →  App._do_run() [background thread]
-    ↓
-    POST /render {chart_type, kw}
-    → plotter_server._build_spec()
-    → plotter_spec_*.build_*_spec(kw)
-    → Plotly JSON spec → rendered by Plotly.js in webview
-
-Export:
-    plotter_export.export_plotly(spec_json, path, journal, col_label)
-    → plotly.io.write_image (kaleido) or write_html
+    │
+    ├── Plotly path (primary — all 29 chart types):
+    │     POST /render {chart_type, kw}
+    │     → plotter_server._build_spec()
+    │     → plotter_spec_*.build_*_spec(kw)
+    │     → Plotly JSON spec → rendered by Plotly.js in webview
+    │
+    └── Matplotlib path (fallback / export):
+          plotter_functions.plotter_barplot(**kw)  →  matplotlib fig, ax
+          → FigureCanvasTkAgg(fig)  or  fig.savefig(path)
 ```
 
 ### Dependency graph
 
 ```
 plotter_barplot_app.py
-  ├── plotter_widgets.py          (pure Tk + design tokens)
-  ├── plotter_validators.py       (pure pandas)
-  ├── plotter_results.py          (receives app object)
-  ├── plotter_chart_helpers.py    (numpy, pandas, scipy — stats helpers)
-  ├── plotter_server.py           (FastAPI + Plotly spec builder dispatch)
-  │     └── plotter_spec_*.py     (29 Plotly spec builders)
-  │           └── plotter_spec_helpers.py + plotter_plotly_theme.py
-  └── 5 mixin modules             (execution, file_io, validators, collect, stats_tabs)
+  ├── plotter_widgets.py          (no prism deps — pure Tk + constants)
+  ├── plotter_validators.py       (no prism deps — pure pandas)
+  ├── plotter_results.py          (receives app object; no other prism imports)
+  ├── plotter_functions.py        (numpy, pandas, matplotlib, scipy — all lazy)
+  └── plotter_canvas_renderer.py  (numpy, pandas — NO matplotlib)
 ```
 
 ### Key App methods
@@ -504,41 +495,60 @@ sys.exit(0 if _h.FAIL == 0 else 1)
 
 | Suite | Module | Tests | What it covers |
 |---|---|---|---|
+| comprehensive | test_comprehensive | 309 | All chart types + stats engine |
 | stats | test_stats | 57 | Statistical verification + control-group logic |
 | validators | test_validators | 35 | All spreadsheet validators |
-| specs | test_phase3_plotly | 11 | Plotly spec builders + FastAPI server |
+| specs | test_phase3_plotly | 11+ | Plotly spec builders + FastAPI server |
 | api | test_api | 18 | FastAPI endpoint tests (TestClient) |
 
 Additional test files (not in run_all.py):
+- `tests/test_png_render.py` — 29 tests, one per chart type (matplotlib render)
 - `tests/visual_test.py` — manual visual regression tests
-- `tests/test_modular.py` — 40+ widget/design-token tests
-- `tests/test_phase2_infra.py` — infrastructure module tests
 
 ---
 
 ## Known gotchas
 
-1. **`ttk.Treeview` heading colours on macOS Aqua theme** — `ttk.Style.configure`
+1. **`_ensure_imports()` must be first** in every chart function. matplotlib is
+   `None` at module load time. Calling `plt.subplots()` before `_ensure_imports()`
+   raises `TypeError: 'NoneType' is not callable`.
+
+2. **`_style_kwargs(locals())`** must be called *after all parameters are defined*
+   but *before* any code that modifies locals(). Call it immediately after
+   `_base_plot_setup()`.
+
+3. **Docstring indentation after multi-line signatures** — if you add a docstring
+   to a function with multi-line parameters, place the docstring *after the closing
+   `):`*, never between parameter lines. The regex-based docstring insertion in
+   session 13 accidentally broke this; it was fixed with a de-indent pass.
+
+4. **Canvas-mode and `_canvas_widget`** — in canvas mode `self._canvas_widget`
+   is `None`. Never call `self._canvas_widget.get_tk_widget()` without first
+   checking `if self._canvas_widget is not None`.
+
+5. **`_bar_renderer` lifetime** — cleared to `None` before each new render.
+   Check for `None` before using.
+
+6. **All 29 chart types are now registered** — area_chart, raincloud, qq_plot,
+   lollipop, waterfall, pyramid, and ecdf were added to `plotter_registry.py`
+   and appear in the sidebar. This gotcha is resolved.
+
+7. **`ttk.Treeview` heading colours on macOS Aqua theme** — `ttk.Style.configure`
    heading background is ignored on Aqua. Headers appear in the system default
    colour. Fix requires `style.theme_use("clam")` or custom drawing.
 
-2. **`_populate_results` for grouped charts** reads `df.select_dtypes(include="number")`
+8. **`_populate_results` for grouped charts** reads `df.select_dtypes(include="number")`
    which merges the two-row-header grouped layout incorrectly. Results panel
    shows all numeric cells combined for grouped/stacked charts — known issue.
 
-3. **Spec builders read Excel independently** — each `build_*_spec()` reads the
-   Excel file directly. They do NOT share data parsing with the app layer.
+9. **Old test_canvas_renderer and test_modular** — Deleted. Replaced by
+   `tests/test_stats.py`, `tests/test_validators.py`, `tests/test_api.py`,
+   and `tests/test_png_render.py`.
 
-4. **Plotly spec builders require `plotly`** — install with `pip install plotly`.
-   Without it, `/render` will return import errors.
-
-5. **`/upload` stores files in `$TMPDIR/refraction-uploads/`** — UUID-prefixed
-   to prevent collisions. Clean up periodically in production.
-
-6. **React SPA needs rebuild after changes** — `cd plotter_web && npm run build`.
-
-7. **UndoStack exists but `push()` is never called** — undo/redo are wired in
-   the UI but the stack is always empty. Needs wiring to be functional.
+10. **The `_kw_snap` deep-copy** in `_do_run` is taken *after* `spec.filter_kwargs`
+    strips unsupported keys. `build_bar_scene` reads `kw["excel_path"]` so the
+    path must survive the filter. It always does for bar/grouped_bar, but check
+    if adding a new chart type with unusual kwargs.
 
 ---
 
@@ -570,11 +580,8 @@ backward compatibility. All 120 tests pass.
 | `plotter_app_icons.py` | Sidebar icon drawing for all 29 chart types |
 | `plotter_presets.py` | Style preset system: load/save named presets as `.json` |
 | `plotter_session.py` | Session persistence: auto-save and restore last-used settings |
-| `plotter_events.py` | `EventBus` for decoupled pub/sub messaging between components |
-| `plotter_types.py` | Shared dataclasses and type definitions |
 | `plotter_undo.py` | `UndoStack` implementing undo/redo for plot parameter changes |
 | `plotter_errors.py` | `ErrorReporter` for structured, user-friendly error messages |
-| `plotter_comparisons.py` | Custom comparison builder: select arbitrary group pairs for stats |
 | `plotter_project.py` | `.cplot` project file save/open (ZIP archives with data + settings) |
 | `plotter_import_pzfx.py` | GraphPad Prism `.pzfx` file importer |
 | `plotter_wiki_content.py` | Statistical wiki content: 29 sections, 21 references |
@@ -607,10 +614,7 @@ backward compatibility. All 120 tests pass.
     `prism_` prefix. Comments and docstrings may still say "GraphPad Prism"
     (that's the product being emulated) but Python identifiers use `plotter_`.
 
-13. **Event bus is optional** — components don't need to use `EventBus`. It is
-    wired in but not required for rendering or stats.
-
-14. **`.cplot` files are ZIP archives** — they contain `settings.json` +
+13. **`.cplot` files are ZIP archives** — they contain `settings.json` +
     the original Excel file. Do not assume plain JSON.
 
 15. **`plotter_registry.py` is the canonical source** for `PlotTypeConfig` entries.
