@@ -215,8 +215,8 @@ class TestRenderErrors:
             "chart_type": "nonexistent_chart",
             "kw": {}
         })
-        # Should not crash the server
-        assert resp.status_code == 200
+        # Should return 400 for unknown chart type (input validation)
+        assert resp.status_code == 400
 
 
 # =========================================================================
