@@ -1,4 +1,4 @@
-"""Plotly theme matching Refraction's matplotlib style."""
+"""Plotly theme for Refraction — GraphPad Prism-inspired defaults."""
 
 from refraction.core.config import PRISM_PALETTE  # noqa: F401 — re-export
 

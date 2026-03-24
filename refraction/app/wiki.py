@@ -3,7 +3,6 @@ plotter_app_wiki.py
 ===================
 Statistical reference wiki popup for Refraction.
 Two-pane Toplevel: TOC sidebar + scrollable content.
-LaTeX rendered via matplotlib mathtext engine.
 """
 import tkinter as tk
 from tkinter import ttk
@@ -20,9 +19,11 @@ except ImportError:
 
 
 def _render_latex_image(expression: str, fontsize: int = 13):
-    """
-    Render a matplotlib mathtext expression to a PIL Image.
-    Returns (PIL.Image, PhotoImage-compatible) or None if rendering fails.
+    """Render a LaTeX expression to a PIL Image.
+
+    Currently a no-op stub. Returns None so the wiki displays plain text
+    for formulas. A future implementation could use a lightweight LaTeX
+    renderer (e.g. matplotlib.mathtext if available, or sympy/latex2img).
     """
     # LaTeX rendering removed (matplotlib dependency dropped).
     # Wiki displays plain text instead.

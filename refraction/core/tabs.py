@@ -39,8 +39,9 @@ class TabState:
     validated:      bool        # whether spreadsheet passed validation
     plot_frame:     Any         # ttk.Frame — stable container; NEVER replaced
 
-    fig:            Any = None  # matplotlib Figure; kept for export
-    canvas_widget:  Any = None  # FigureCanvasTkAgg (Agg path)
+    # NOTE: fig and canvas_widget fields removed — matplotlib rendering path
+    # was fully replaced by Plotly/kaleido.  Export now goes through
+    # refraction.io.export.export_plotly().
     render_job_id:  str = None  # UUID hex; superseded-job guard
 
 
@@ -115,8 +116,6 @@ class TabManager:
         tab.plot_frame.place_forget()
         tab.plot_frame.destroy()
 
-        tab.fig = None
-
         self._tabs.pop(idx)
 
         if not self._tabs:
@@ -183,8 +182,6 @@ class TabManager:
         # 6. Show incoming plot frame; update app references
         incoming.plot_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
         self._app._plot_frame    = incoming.plot_frame
-        self._app._canvas_widget = incoming.canvas_widget
-        self._app._fig           = incoming.fig
 
         # 7. Sync sidebar highlight (silent — no chart-type reset)
         self._app._sb_select_silent(incoming.chart_type_idx)

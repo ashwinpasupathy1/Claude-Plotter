@@ -2,7 +2,7 @@
 plotter_wiki_content.py
 =======================
 Statistical reference content for Refraction wiki.
-All formulas use matplotlib mathtext syntax.
+All formulas use plain-text notation (matplotlib mathtext was removed).
 Citations reference section-level locations only.
 """
 
