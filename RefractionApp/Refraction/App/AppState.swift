@@ -21,6 +21,11 @@ final class AppState {
     /// Most recent error message (nil = no error).
     var error: String?
 
+    /// Whether a file has been loaded (used to decide welcome vs chart view).
+    var hasFileLoaded: Bool {
+        !chartConfig.excelPath.isEmpty
+    }
+
     // MARK: - Actions
 
     /// Send the current configuration to the Python server and store the result.
@@ -64,5 +69,17 @@ final class AppState {
     func clearChart() {
         currentSpec = nil
         error = nil
+    }
+
+    /// Dismiss the current error.
+    func dismissError() {
+        error = nil
+    }
+
+    /// Retry the last action (re-generate the plot).
+    @MainActor
+    func retryLastAction() async {
+        error = nil
+        await generatePlot()
     }
 }

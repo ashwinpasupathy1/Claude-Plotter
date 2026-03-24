@@ -1,5 +1,6 @@
 // ContentView.swift — Root view with 3-column NavigationSplitView.
-// Sidebar: chart type selector. Content: chart canvas. Detail: config panel.
+// Sidebar: chart type selector. Content: chart canvas / welcome / error.
+// Detail: config panel.
 
 import SwiftUI
 
@@ -48,24 +49,25 @@ struct ContentView: View {
                 ProgressView("Generating chart...")
                     .controlSize(.large)
             } else if let error = appState.error {
-                VStack(spacing: 12) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.largeTitle)
-                        .foregroundStyle(.secondary)
-                    Text(error)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 400)
-                }
-                .padding()
+                ErrorView(
+                    errorMessage: error,
+                    onRetry: {
+                        Task { await appState.retryLastAction() }
+                    },
+                    onDismiss: {
+                        appState.dismissError()
+                    }
+                )
             } else if appState.currentSpec != nil {
                 ChartCanvasView()
+            } else if !appState.hasFileLoaded {
+                WelcomeView()
             } else {
                 VStack(spacing: 16) {
                     Image(systemName: "chart.bar.fill")
                         .font(.system(size: 48))
                         .foregroundStyle(.quaternary)
-                    Text("Select a data file and click Generate")
+                    Text("Click Generate to create your chart")
                         .foregroundStyle(.secondary)
                 }
             }
