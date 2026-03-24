@@ -72,9 +72,11 @@ except ImportError as _e:
 try:
     from refraction.app.icons import ICON_FN
     _ICON_FN = ICON_FN  # backward-compat alias; local icon functions removed
+    _icon_bar = ICON_FN.get("bar", lambda *a: None)  # fallback for sidebar
 except ImportError as _e:
     print(f"[refraction] warning: icons not found ({_e})")
     _ICON_FN = {}
+    _icon_bar = lambda *a: None
 
 # Heavy scientific imports (pandas, scipy) are deferred to first use so
 # the window appears immediately. They are loaded on a background thread
@@ -370,6 +372,7 @@ class App(StatsTabMixin, ValidationMixin, CollectMixin, FileIOMixin,
         from refraction.core.errors import reporter
         reporter.set_root(self)
         # --- end Wave 2 infrastructure ---
+        self._use_webview = tk.BooleanVar(value=True)
         ttk.Style().theme_use("aqua")
         set_dock_icon()
         self._set_tk_icon()
@@ -406,7 +409,6 @@ class App(StatsTabMixin, ValidationMixin, CollectMixin, FileIOMixin,
 
         # Phase 3: web view instances per tab
         self._plotly_views: dict = {}
-        self._use_webview = tk.BooleanVar(value=True)
 
     def _auto_save(self):
         """Save session state to disk every 30 seconds."""

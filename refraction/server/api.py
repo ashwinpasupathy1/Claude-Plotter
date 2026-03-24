@@ -128,6 +128,22 @@ def _make_app():
                     "lollipop", "waterfall", "pyramid", "ecdf"]
         }
 
+    class AnalyzeRequest(BaseModel):
+        chart_type: str
+        config: dict[str, Any] = {}
+        data_path: str = ""
+
+    @api.post("/analyze")
+    def analyze_chart(req: AnalyzeRequest):
+        """Accept chart config, return renderer-agnostic ChartSpec."""
+        try:
+            from refraction.analysis import analyze
+            data_path = req.data_path or req.config.get("excel_path", "")
+            spec = analyze(data_path, req.chart_type, req.config)
+            return {"ok": True, "spec": spec}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     @api.get("/health")
     def health():
         return {"status": "ok"}
