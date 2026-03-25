@@ -388,3 +388,20 @@ For validators, add:
 - [ ] Assert on error message content, not just count
 - [ ] Round-trip: valid data -> validate -> analyze -> check output
 - [ ] Round-trip: invalid data -> validate -> confirm rejection reason
+
+---
+
+## Engine Stability Audit (TODO)
+
+Stop adding features. Bulletproof the analysis engine instead.
+
+### Scope: `refraction/analysis/` and `refraction/core/`
+
+- [ ] Edge cases: empty data, single values, all-NaN columns, all-identical values
+- [ ] Division by zero guards (zero variance, zero n, zero denominator)
+- [ ] NaN/Inf propagation — every function should handle or reject gracefully
+- [ ] Mismatched column lengths, missing headers, unexpected dtypes
+- [ ] Error messages that tell the user what went wrong and how to fix it
+- [ ] Every analyzer returns a useful warning instead of crashing on bad input
+- [ ] Consolidate and minimize test suite — remove structural/shape-only tests that give false confidence
+- [ ] Human will write proper unit tests with ground-truth comparisons (see above)
