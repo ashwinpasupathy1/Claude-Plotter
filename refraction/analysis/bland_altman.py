@@ -31,9 +31,12 @@ def analyze_bland_altman(kw: dict) -> ChartSpec:
     method_a_name = str(cols[0])
     method_b_name = str(cols[1])
 
-    a_vals = pd.to_numeric(df[cols[0]], errors="coerce").dropna().values
-    b_vals = pd.to_numeric(df[cols[1]], errors="coerce").dropna().values
-    n = min(len(a_vals), len(b_vals))
+    a_raw = pd.to_numeric(df[cols[0]], errors="coerce")
+    b_raw = pd.to_numeric(df[cols[1]], errors="coerce")
+    valid = a_raw.notna() & b_raw.notna()
+    a_vals = a_raw[valid].values
+    b_vals = b_raw[valid].values
+    n = len(a_vals)
 
     if n < 3:
         return ChartSpec(
@@ -41,9 +44,6 @@ def analyze_bland_altman(kw: dict) -> ChartSpec:
             title=cfg["title"],
             warnings=["Need at least 3 paired observations."],
         )
-
-    a_vals = a_vals[:n]
-    b_vals = b_vals[:n]
 
     means = (a_vals + b_vals) / 2.0
     diffs = a_vals - b_vals
