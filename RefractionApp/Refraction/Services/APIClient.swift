@@ -215,6 +215,11 @@ actor APIClient {
         }
 
         guard http.statusCode == 200 else {
+            // Try to extract error message from response body
+            if let errorObj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let errorMsg = errorObj["error"] as? String {
+                throw APIError.serverError(errorMsg)
+            }
             throw APIError.httpError(statusCode: http.statusCode)
         }
 

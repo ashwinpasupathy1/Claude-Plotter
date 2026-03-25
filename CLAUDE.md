@@ -17,11 +17,12 @@ Never commit if tests fail.  Never skip it.
 
 ## Architecture Principles
 
-1. **No generic analysis path.** Every chart type MUST have a dedicated
-   analyzer that understands its data layout. The generic column-as-groups
-   fallback in `engine.py` exists only as legacy — new chart types must
-   never rely on it. Analyzers are grouped by data table type (XY, Column,
-   Grouped, etc.) and registered in `_DEDICATED_ANALYZERS`.
+1. **No generic analysis path (goal).** Every chart type SHOULD have a dedicated
+   analyzer that understands its data layout. Currently 15 chart types have
+   dedicated analyzers registered in `_DEDICATED_ANALYZERS`; the remaining 14
+   (bar, box, violin, histogram, etc.) still use the generic column-as-groups
+   fallback in `engine.py`. This is tracked as tech debt -- new chart types
+   must always get a dedicated analyzer.
 
 2. **Renderer knows nothing about statistics.** The SwiftUI renderer reads
    the JSON spec and draws what it sees. It has no knowledge of p-values,

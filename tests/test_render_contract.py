@@ -26,116 +26,13 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 from refraction.analysis.engine import analyze
+from refraction.server.api import _to_chart_spec
 from tests.conftest import (
     _bar_excel, _line_excel, _simple_xy_excel, _grouped_excel,
     _km_excel, _heatmap_excel, _two_way_excel, _contingency_excel,
     _chi_gof_excel, _bland_altman_excel, _forest_excel, _bubble_excel,
     _with_excel, THREE_GROUPS, PAIRED_GROUPS, SCATTER_XS, SCATTER_YS,
 )
-
-# ── Inline _to_chart_spec from api.py so we can test without starting server ──
-# The actual function is defined inside create_api() scope in api.py, so we
-# replicate it here. This is the contract we're testing.
-
-
-def _to_chart_spec(result: dict, config: dict) -> dict:
-    """Mirror of the _to_chart_spec in api.py for testing."""
-    palette = [
-        "#E8453C", "#2274A5", "#32936F", "#F18F01", "#A846A0",
-        "#6B4226", "#048A81", "#D4AC0D", "#3B1F2B", "#44BBA4",
-    ]
-
-    groups = []
-    for g in result.get("groups", []):
-        # Dedicated analyzers return groups as strings (group names), not dicts
-        if isinstance(g, str):
-            continue
-        raw = g.get("values", [])
-        groups.append({
-            "name": g.get("name", ""),
-            "values": {
-                "raw": raw if isinstance(raw, list) else [],
-                "mean": g.get("mean"),
-                "sem": g.get("sem"),
-                "sd": g.get("sd"),
-                "ci95": g.get("ci95"),
-                "n": g.get("n", 0),
-            },
-            "color": g.get("color", palette[len(groups) % len(palette)]),
-        })
-
-    comparisons_out = []
-    brackets = []
-    group_names = [g["name"] for g in groups]
-    for i, c in enumerate(result.get("comparisons", [])):
-        if "error" in c:
-            continue
-        p = c.get("p_value", 1.0)
-        label = c.get("stars", "ns")
-        comparisons_out.append({
-            "group_1": c.get("group_a", ""),
-            "group_2": c.get("group_b", ""),
-            "p_value": p,
-            "significant": p < config.get("p_sig_threshold", 0.05),
-            "label": label,
-        })
-        left = group_names.index(c["group_a"]) if c.get("group_a") in group_names else i
-        right = group_names.index(c["group_b"]) if c.get("group_b") in group_names else i + 1
-        brackets.append({
-            "left_index": left,
-            "right_index": right,
-            "label": label,
-            "stacking_order": i,
-        })
-
-    stats_test = config.get("stats_test", "none")
-    stats = None
-    if stats_test != "none" and comparisons_out:
-        stats = {
-            "test_name": stats_test,
-            "p_value": comparisons_out[0]["p_value"] if len(comparisons_out) == 1 else None,
-            "statistic": None,
-            "comparisons": comparisons_out,
-            "normality": None,
-            "effect_size": None,
-            "warning": None,
-        }
-
-    error_type = config.get("error_type", config.get("error", "sem"))
-
-    return {
-        "chart_type": result.get("chart_type", "bar"),
-        "groups": groups,
-        "data": result.get("data", {}),
-        "style": {
-            "colors": [g["color"] for g in groups] or palette[:1],
-            "show_points": bool(config.get("show_points", False)),
-            "show_brackets": True,
-            "point_size": config.get("point_size", 6.0),
-            "point_alpha": config.get("point_alpha", 0.8),
-            "bar_width": config.get("bar_width", 0.6),
-            "error_type": error_type,
-            "axis_style": config.get("axis_style", "open"),
-        },
-        "axes": {
-            "title": result.get("title", ""),
-            "x_label": result.get("x_label", ""),
-            "y_label": result.get("y_label", ""),
-            "x_scale": "linear",
-            "y_scale": config.get("yscale", "linear"),
-            "x_range": None,
-            "y_range": config.get("ylim"),
-            "tick_direction": config.get("tick_dir", "out"),
-            "spine_width": config.get("spine_width", 1.0),
-            "font_size": config.get("font_size", 12.0),
-        },
-        "stats": stats,
-        "brackets": brackets if stats else [],
-        "reference_line": (
-            {"y": config["ref_line"], "label": config.get("ref_line_label", "")}
-            if "ref_line" in config else None
-        ),
-    }
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

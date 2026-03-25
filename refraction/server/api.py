@@ -7,8 +7,11 @@ Endpoints:
     POST /upload       -- accept .xlsx/.xls/.csv files
 """
 
+import atexit
 import logging
 import os
+import pathlib
+import shutil
 import tempfile
 import threading
 import uuid
@@ -51,6 +54,131 @@ def start_server() -> None:
     _server_thread = threading.Thread(target=_run, daemon=True,
                                       name="refraction-server")
     _server_thread.start()
+
+
+def _validate_data_path(path: str) -> str | None:
+    """Validate data path. Returns error message or None if ok."""
+    if not path:
+        return "Missing file path"
+    if not os.path.isfile(path):
+        return f"File not found: {path}"
+    ext = os.path.splitext(path)[1].lower()
+    if ext not in (".xlsx", ".xls", ".csv"):
+        return f"Unsupported file type: {ext}"
+    return None
+
+
+def _to_chart_spec(result: dict, config: dict) -> dict:
+    """Transform analyze() output into the ChartSpec JSON schema."""
+    palette = [
+        "#E8453C", "#2274A5", "#32936F", "#F18F01", "#A846A0",
+        "#6B4226", "#048A81", "#D4AC0D", "#3B1F2B", "#44BBA4",
+    ]
+
+    import math
+
+    def _sanitize(v):
+        """Replace NaN/Inf with None for JSON safety."""
+        if v is None:
+            return None
+        if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+            return None
+        return v
+
+    # -- groups: nest values into {raw, mean, sem, sd, ci95, n} --
+    groups = []
+    for g in result.get("groups", []):
+        # Dedicated analyzers may return groups as plain strings (group names)
+        if isinstance(g, str):
+            continue
+        raw = g.get("values", [])
+        groups.append({
+            "name": g.get("name", ""),
+            "values": {
+                "raw": raw if isinstance(raw, list) else [],
+                "mean": _sanitize(g.get("mean")),
+                "sem": _sanitize(g.get("sem")),
+                "sd": _sanitize(g.get("sd")),
+                "ci95": _sanitize(g.get("ci95")),
+                "n": g.get("n", 0),
+            },
+            "color": g.get("color", palette[len(groups) % len(palette)]),
+        })
+
+    # -- comparisons -> stats + brackets --
+    comparisons_out = []
+    brackets = []
+    group_names = [g["name"] for g in groups]
+    for i, c in enumerate(result.get("comparisons", [])):
+        if "error" in c:
+            continue
+        p = c.get("p_value", 1.0)
+        label = c.get("stars", "ns")
+        comparisons_out.append({
+            "group_1": c.get("group_a", ""),
+            "group_2": c.get("group_b", ""),
+            "p_value": p,
+            "significant": p < config.get("p_sig_threshold", 0.05),
+            "label": label,
+        })
+        # Build bracket indices
+        left = group_names.index(c["group_a"]) if c.get("group_a") in group_names else i
+        right = group_names.index(c["group_b"]) if c.get("group_b") in group_names else i + 1
+        brackets.append({
+            "left_index": left,
+            "right_index": right,
+            "label": label,
+            "stacking_order": i,
+        })
+
+    stats_test = config.get("stats_test", "none")
+    stats = None
+    if stats_test != "none" and comparisons_out:
+        stats = {
+            "test_name": stats_test,
+            "p_value": comparisons_out[0]["p_value"] if len(comparisons_out) == 1 else None,
+            "statistic": None,
+            "comparisons": comparisons_out,
+            "normality": None,
+            "effect_size": None,
+            "warning": None,
+        }
+
+    error_type = config.get("error_type", config.get("error", "sem"))
+
+    return {
+        "chart_type": result.get("chart_type", "bar"),
+        "groups": groups,
+        "data": result.get("data", {}),
+        "style": {
+            "colors": [g["color"] for g in groups] or palette[:1],
+            "show_points": bool(config.get("show_points", False)),
+            "show_brackets": True,
+            "point_size": config.get("point_size", 6.0),
+            "point_alpha": config.get("point_alpha", 0.8),
+            "bar_width": config.get("bar_width", 0.6),
+            "error_type": error_type,
+            "axis_style": config.get("axis_style", "open"),
+        },
+        "axes": {
+            "title": result.get("title", ""),
+            "x_label": result.get("x_label", ""),
+            "y_label": result.get("y_label", ""),
+            "x_scale": "linear",
+            "y_scale": config.get("yscale", "linear"),
+            "x_range": None,
+            "y_range": config.get("ylim"),
+            "tick_direction": config.get("tick_dir", "out"),
+            "spine_width": config.get("spine_width", 1.0),
+            "font_size": config.get("font_size", 12.0),
+        },
+        "stats": stats,
+        "brackets": brackets if stats else [],
+        "reference_line": (
+            {"y": config["ref_line"], "label": config.get("ref_line_label", "")}
+            if "ref_line" in config else None
+        ),
+    }
 
 
 def _make_app():
@@ -119,6 +247,11 @@ def _make_app():
     def analyze_endpoint(req: AnalyzeRequest):
         """Run renderer-independent analysis on uploaded data."""
         try:
+            path_err = _validate_data_path(req.excel_path)
+            if path_err:
+                return JSONResponse(
+                    {"ok": False, "error": path_err}, status_code=400
+                )
             from refraction.analysis import analyze
             result = analyze(req.chart_type, req.excel_path, req.config)
             if not result.get("ok"):
@@ -150,9 +283,10 @@ def _make_app():
 
             kw = dict(req.kw)
             excel_path = kw.pop("excel_path", "")
-            if not excel_path:
+            path_err = _validate_data_path(excel_path)
+            if path_err:
                 return JSONResponse(
-                    {"ok": False, "error": "Missing excel_path"},
+                    {"ok": False, "error": path_err},
                     status_code=400,
                 )
 
@@ -181,123 +315,17 @@ def _make_app():
                 {"ok": False, "error": str(exc)}, status_code=500,
             )
 
-    def _to_chart_spec(result: dict, config: dict) -> dict:
-        """Transform analyze() output into the ChartSpec JSON schema."""
-        palette = [
-            "#E8453C", "#2274A5", "#32936F", "#F18F01", "#A846A0",
-            "#6B4226", "#048A81", "#D4AC0D", "#3B1F2B", "#44BBA4",
-        ]
-
-        import math
-
-        def _sanitize(v):
-            """Replace NaN/Inf with None for JSON safety."""
-            if v is None:
-                return None
-            if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
-                return None
-            return v
-
-        # -- groups: nest values into {raw, mean, sem, sd, ci95, n} --
-        groups = []
-        for g in result.get("groups", []):
-            # Dedicated analyzers may return groups as plain strings (group names)
-            if isinstance(g, str):
-                continue
-            raw = g.get("values", [])
-            groups.append({
-                "name": g.get("name", ""),
-                "values": {
-                    "raw": raw if isinstance(raw, list) else [],
-                    "mean": _sanitize(g.get("mean")),
-                    "sem": _sanitize(g.get("sem")),
-                    "sd": _sanitize(g.get("sd")),
-                    "ci95": _sanitize(g.get("ci95")),
-                    "n": g.get("n", 0),
-                },
-                "color": g.get("color", palette[len(groups) % len(palette)]),
-            })
-
-        # -- comparisons → stats + brackets --
-        comparisons_out = []
-        brackets = []
-        group_names = [g["name"] for g in groups]
-        for i, c in enumerate(result.get("comparisons", [])):
-            if "error" in c:
-                continue
-            p = c.get("p_value", 1.0)
-            label = c.get("stars", "ns")
-            comparisons_out.append({
-                "group_1": c.get("group_a", ""),
-                "group_2": c.get("group_b", ""),
-                "p_value": p,
-                "significant": p < config.get("p_sig_threshold", 0.05),
-                "label": label,
-            })
-            # Build bracket indices
-            left = group_names.index(c["group_a"]) if c.get("group_a") in group_names else i
-            right = group_names.index(c["group_b"]) if c.get("group_b") in group_names else i + 1
-            brackets.append({
-                "left_index": left,
-                "right_index": right,
-                "label": label,
-                "stacking_order": i,
-            })
-
-        stats_test = config.get("stats_test", "none")
-        stats = None
-        if stats_test != "none" and comparisons_out:
-            stats = {
-                "test_name": stats_test,
-                "p_value": comparisons_out[0]["p_value"] if len(comparisons_out) == 1 else None,
-                "statistic": None,
-                "comparisons": comparisons_out,
-                "normality": None,
-                "effect_size": None,
-                "warning": None,
-            }
-
-        error_type = config.get("error_type", config.get("error", "sem"))
-
-        return {
-            "chart_type": result.get("chart_type", "bar"),
-            "groups": groups,
-            "data": result.get("data", {}),
-            "style": {
-                "colors": [g["color"] for g in groups] or palette[:1],
-                "show_points": bool(config.get("show_points", False)),
-                "show_brackets": True,
-                "point_size": config.get("point_size", 6.0),
-                "point_alpha": config.get("point_alpha", 0.8),
-                "bar_width": config.get("bar_width", 0.6),
-                "error_type": error_type,
-                "axis_style": config.get("axis_style", "open"),
-            },
-            "axes": {
-                "title": result.get("title", ""),
-                "x_label": result.get("x_label", ""),
-                "y_label": result.get("y_label", ""),
-                "x_scale": "linear",
-                "y_scale": config.get("yscale", "linear"),
-                "x_range": None,
-                "y_range": config.get("ylim"),
-                "tick_direction": config.get("tick_dir", "out"),
-                "spine_width": config.get("spine_width", 1.0),
-                "font_size": config.get("font_size", 12.0),
-            },
-            "stats": stats,
-            "brackets": brackets if stats else [],
-            "reference_line": (
-                {"y": config["ref_line"], "label": config.get("ref_line_label", "")}
-                if "ref_line" in config else None
-            ),
-        }
-
     # ------------------------------------------------------------------
     # File upload
     # ------------------------------------------------------------------
     UPLOAD_DIR = os.path.join(tempfile.gettempdir(), "refraction-uploads")
     os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+    def _cleanup_uploads():
+        if os.path.isdir(UPLOAD_DIR):
+            shutil.rmtree(UPLOAD_DIR, ignore_errors=True)
+
+    atexit.register(_cleanup_uploads)
 
     @api.post("/upload")
     async def upload_file(file: UploadFile = FastAPIFile(...)):
@@ -329,6 +357,11 @@ def _make_app():
     def data_preview(req: DataPreviewRequest):
         """Return raw contents of an Excel/CSV file as JSON for read-only display."""
         try:
+            path_err = _validate_data_path(req.excel_path)
+            if path_err:
+                return JSONResponse(
+                    {"ok": False, "error": path_err}, status_code=400
+                )
             import pandas as pd
             if req.excel_path.endswith(".csv"):
                 df = pd.read_csv(req.excel_path, nrows=200)
@@ -359,6 +392,11 @@ def _make_app():
     def recommend_test_endpoint(req: RecommendTestRequest):
         """Recommend the best statistical test for the data."""
         try:
+            path_err = _validate_data_path(req.excel_path)
+            if path_err:
+                return JSONResponse(
+                    {"ok": False, "error": path_err}, status_code=400
+                )
             import pandas as pd
             from refraction.core.stats import recommend_test
 
@@ -397,6 +435,11 @@ def _make_app():
     def analyze_stats_endpoint(req: AnalyzeStatsRequest):
         """Run a statistical analysis and return results as JSON."""
         try:
+            path_err = _validate_data_path(req.excel_path)
+            if path_err:
+                return JSONResponse(
+                    {"ok": False, "error": path_err}, status_code=400
+                )
             import math
             import pandas as pd
             from refraction.core.stats import (
@@ -711,14 +754,30 @@ def _make_app():
         try:
             import pandas as pd
 
-            output_path = req.output_path
+            output = pathlib.Path(req.output_path).resolve()
+            # Reject path traversal
+            if ".." in output.parts:
+                return JSONResponse(
+                    {"ok": False, "error": "Invalid path"}, status_code=400
+                )
+            # Must be under user's home directory
+            home = pathlib.Path.home()
+            if not str(output).startswith(str(home)):
+                return JSONResponse(
+                    {"ok": False, "error": "Path must be within home directory"},
+                    status_code=400,
+                )
+            output_path = str(output)
             if not output_path.endswith(".refract"):
                 output_path += ".refract"
 
-            # Ensure parent directory exists
+            # Parent must exist (don't create arbitrary directories)
             parent = os.path.dirname(output_path)
-            if parent:
-                os.makedirs(parent, exist_ok=True)
+            if parent and not os.path.isdir(parent):
+                return JSONResponse(
+                    {"ok": False, "error": "Parent directory does not exist"},
+                    status_code=400,
+                )
 
             project = req.project
             data_tables = project.get("dataTables", [])
