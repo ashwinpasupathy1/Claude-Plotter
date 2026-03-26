@@ -175,14 +175,17 @@ struct ToolbarBanner: View {
             HStack(spacing: 6) {
                 activeButton(icon: "tablecells.badge.ellipsis", label: "Table", color: hasExperiment ? .teal : .gray) {
                     guard appState.activeExperiment != nil else { return }
+                    DebugLog.shared.logUI("open NewDataTableDialog")
                     showNewDataTableDialog = true
                 }
                 activeButton(icon: "chart.bar.fill", label: "Graph", color: hasData ? .indigo : .gray) {
                     guard appState.activeExperiment?.hasData == true else { return }
+                    DebugLog.shared.logUI("open NewGraphDialog")
                     showNewGraphDialog = true
                 }
                 activeButton(icon: "trash", label: "Delete", color: hasSelection ? .red : .gray) {
                     guard appState.activeItemID != nil else { return }
+                    DebugLog.shared.logUI("delete \(appState.activeItemKind?.rawValue ?? "item")")
                     showDeleteConfirm = true
                 }
             }
@@ -239,6 +242,7 @@ struct ToolbarBanner: View {
             HStack(spacing: 6) {
                 activeButton(icon: "function", label: "Analyze", color: hasData ? .purple : .gray) {
                     guard appState.activeExperiment?.hasData == true else { return }
+                    DebugLog.shared.logUI("open AnalyzeDataDialog")
                     showAnalyzeDialog = true
                 }
             }
@@ -256,22 +260,27 @@ struct ToolbarBanner: View {
             HStack(spacing: 6) {
                 activeButton(icon: "doc.fill", label: "Data", color: hasGraph ? .teal : .gray) {
                     guard appState.activeGraph != nil else { return }
+                    DebugLog.shared.logUI("open DataSettingsDialog")
                     showDataSettings = true
                 }
                 activeButton(icon: "paintbrush", label: "Format", color: hasGraph ? .orange : .gray) {
                     guard appState.activeGraph != nil else { return }
+                    DebugLog.shared.logUI("open FormatGraphDialog")
                     showFormatGraph = true
                 }
                 activeButton(icon: "ruler", label: "Axes", color: hasGraph ? .brown : .gray) {
                     guard appState.activeGraph != nil else { return }
+                    DebugLog.shared.logUI("open FormatAxesDialog")
                     showFormatAxes = true
                 }
                 activeButton(icon: "paintpalette", label: "Style", color: hasGraph ? .yellow : .gray) {
                     guard appState.activeGraph != nil else { return }
+                    DebugLog.shared.logUI("open StyleSettingsDialog")
                     showStyleSettings = true
                 }
                 activeButton(icon: "function", label: "Stats", color: hasGraph ? .purple : .gray) {
                     guard appState.activeGraph != nil else { return }
+                    DebugLog.shared.logUI("open StatsSettingsDialog")
                     showStatsSettings = true
                 }
             }
@@ -316,9 +325,11 @@ struct ToolbarBanner: View {
         VStack(spacing: 1) {
             HStack(spacing: 6) {
                 activeButton(icon: "book.fill", label: "Wiki", color: .cyan) {
+                    DebugLog.shared.logUI("open StatsWiki")
                     showStatsWiki = true
                 }
                 activeButton(icon: "text.book.closed", label: "Guide", color: .indigo) {
+                    DebugLog.shared.logUI("open ArchitectureGuide")
                     showArchitectureGuide = true
                 }
             }
@@ -336,6 +347,7 @@ struct ToolbarBanner: View {
             HStack(spacing: 6) {
                 activeButton(icon: "square.and.arrow.up", label: "Export", color: hasChart ? .pink : .gray) {
                     guard appState.activeGraph?.chartSpec != nil else { return }
+                    DebugLog.shared.logUI("open ExportDialog")
                     showExportDialog = true
                 }
             }

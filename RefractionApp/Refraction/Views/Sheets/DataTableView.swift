@@ -202,6 +202,7 @@ private struct CellEditor: View {
         table.setCell(row: row, col: col, value: newValue)
         appState.markDirty()
         isEditing = false
+        DebugLog.shared.logVerbose("cell edit [\(row),\(col)] = \(trimmed)")
     }
 
     private func cancelEdit() {
@@ -249,6 +250,7 @@ private struct ColumnHeader: View {
         if col < table.columns.count {
             table.columns[col] = editText
             appState.markDirty()
+            DebugLog.shared.logVerbose("rename column[\(col)] = \(editText)")
         }
         isEditing = false
     }

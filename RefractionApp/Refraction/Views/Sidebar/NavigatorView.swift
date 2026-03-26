@@ -238,6 +238,7 @@ struct NavigatorView: View {
         appState.activeExperimentID = entry.experimentID
         appState.activeItemID = id
         appState.activeItemKind = entry.kind
+        DebugLog.shared.logUI("select \(entry.kind.rawValue)", detail: "id: \(id.uuidString.prefix(8))")
     }
 
     @ViewBuilder
@@ -248,8 +249,10 @@ struct NavigatorView: View {
         Button {
             if expandedExperiments.contains(experiment.id) {
                 expandedExperiments.remove(experiment.id)
+                DebugLog.shared.logUI("collapse \(experiment.label)")
             } else {
                 expandedExperiments.insert(experiment.id)
+                DebugLog.shared.logUI("expand \(experiment.label)")
             }
         } label: {
             HStack(spacing: 4) {
@@ -282,6 +285,7 @@ struct NavigatorView: View {
                       let toIndex = appState.experiments.firstIndex(where: { $0.id == experiment.id }) else { return }
                 let dest = edge == .bottom ? toIndex + 1 : toIndex
                 if dest != fromIndex && dest != fromIndex + 1 {
+                    DebugLog.shared.logUI("reorder experiment from \(fromIndex) to \(dest)")
                     appState.moveExperiment(from: IndexSet(integer: fromIndex), to: dest > fromIndex ? dest : dest)
                 }
             }

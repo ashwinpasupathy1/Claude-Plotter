@@ -31,6 +31,7 @@ struct GraphSheetView: View {
         .task(id: "\(graph.id)_\(appState.activeGraphDataTable?.columns.count ?? 0)_\(appState.activeGraphDataTable?.rows.count ?? 0)") {
             guard graph.chartSpec == nil,
                   appState.activeGraphDataTable?.hasData == true else { return }
+            DebugLog.shared.logVerbose("auto-generate chart: \(graph.chartType.rawValue)")
             await appState.generatePlot()
         }
         .sheet(isPresented: $showFormatDialog) {

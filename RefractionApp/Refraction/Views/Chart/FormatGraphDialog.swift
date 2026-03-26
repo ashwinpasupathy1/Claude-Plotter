@@ -57,11 +57,15 @@ struct FormatGraphDialog: View {
             HStack {
                 Spacer()
                 Button("Cancel") {
+                    DebugLog.shared.logUI("FormatGraphDialog cancelled")
                     restoreSnapshot()
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
-                Button("Done") { dismiss() }
+                Button("Done") {
+                    DebugLog.shared.logUI("FormatGraphDialog applied")
+                    dismiss()
+                }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
             }
