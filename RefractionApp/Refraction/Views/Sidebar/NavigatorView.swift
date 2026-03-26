@@ -65,6 +65,7 @@ struct NavigatorView: View {
                 newExperimentButton
                 Spacer()
                 Button {
+                    DebugLog.shared.logUI("expand all experiments")
                     expandedExperiments = Set(appState.experiments.map(\.id))
                 } label: {
                     Image(systemName: "chevron.down.2")
@@ -75,6 +76,7 @@ struct NavigatorView: View {
                 .help("Expand All")
 
                 Button {
+                    DebugLog.shared.logUI("collapse all experiments")
                     expandedExperiments.removeAll()
                 } label: {
                     Image(systemName: "chevron.up.2")
@@ -172,6 +174,7 @@ struct NavigatorView: View {
 
     private var newExperimentButton: some View {
         Button {
+            DebugLog.shared.logUI("open NewExperimentDialog")
             showNewExperimentDialog = true
         } label: {
             HStack {
@@ -229,6 +232,8 @@ struct NavigatorView: View {
                 }
             }
         }
+        // Disable implicit animations on the drop indicator so it vanishes instantly
+        .animation(.none, value: dropTargetID)
     }
 
     // MARK: - Experiment Section
@@ -326,6 +331,7 @@ struct NavigatorView: View {
                 if searchText.isEmpty {
                     Button {
                         appState.activeExperimentID = experiment.id
+                        DebugLog.shared.logUI("open NewDataTableDialog", detail: "experiment: \(experiment.label)")
                         showNewDataTableDialog = true
                     } label: {
                         Label("New Data Table...", systemImage: "plus")
@@ -369,6 +375,7 @@ struct NavigatorView: View {
                 if searchText.isEmpty {
                     Button {
                         appState.activeExperimentID = experiment.id
+                        DebugLog.shared.logUI("open NewGraphDialog", detail: "experiment: \(experiment.label)")
                         showNewGraphDialog = true
                     } label: {
                         Label("New Graph...", systemImage: "plus")
@@ -413,6 +420,7 @@ struct NavigatorView: View {
                 if searchText.isEmpty {
                     Button {
                         appState.activeExperimentID = experiment.id
+                        DebugLog.shared.logUI("open AnalyzeDialog", detail: "experiment: \(experiment.label)")
                         showAnalyzeDialog = true
                     } label: {
                         Label("New Analysis...", systemImage: "plus")
@@ -482,8 +490,14 @@ struct NavigatorView: View {
             .buttonStyle(.plain)
         }
         .contextMenu {
-            Button("Rename") { editingID = experiment.id }
-            Button("Delete", role: .destructive) { experimentToDelete = experiment }
+            Button("Rename") {
+                DebugLog.shared.logUI("rename experiment: \(experiment.label)")
+                editingID = experiment.id
+            }
+            Button("Delete", role: .destructive) {
+                DebugLog.shared.logUI("delete experiment: \(experiment.label)")
+                experimentToDelete = experiment
+            }
         }
     }
 
@@ -630,15 +644,11 @@ struct ReorderDropDelegate: DropDelegate {
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
         dropTargetID = targetID
-        // Use the local Y position within the row to decide above/below
-        // DropInfo doesn't give us the view frame directly, but we can
-        // use a heuristic: if Y < ~12pt, it's "top", otherwise "bottom"
         dropEdge = info.location.y < 12 ? .top : .bottom
         return DropProposal(operation: .move)
     }
 
     func dropExited(info: DropInfo) {
-        // Ensure the indicator is always cleared when the drag leaves
         if dropTargetID == targetID {
             dropTargetID = nil
         }
@@ -646,15 +656,23 @@ struct ReorderDropDelegate: DropDelegate {
 
     func performDrop(info: DropInfo) -> Bool {
         let savedEdge = dropEdge
-        // Clear indicator immediately and synchronously
-        dropTargetID = nil
+        // Clear indicator immediately
+        withAnimation(.none) {
+            dropTargetID = nil
+        }
         guard let item = info.itemProviders(for: [.text]).first else { return false }
         item.loadItem(forTypeIdentifier: "public.text", options: nil) { data, _ in
             guard let data = data as? Data,
                   let str = String(data: data, encoding: .utf8),
-                  let droppedID = UUID(uuidString: str) else { return }
+                  let droppedID = UUID(uuidString: str) else {
+                // Failed to decode — ensure indicator is cleared
+                DispatchQueue.main.async { self.dropTargetID = nil }
+                return
+            }
             DispatchQueue.main.async {
                 self.onDrop(droppedID, savedEdge)
+                // Belt-and-suspenders: clear again after reorder completes
+                self.dropTargetID = nil
             }
         }
         return true

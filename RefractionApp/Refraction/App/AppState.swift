@@ -74,7 +74,12 @@ final class AppState {
     var activeItemKind: ItemKind?
 
     /// Developer mode: show raw JSON from the engine for debugging.
+    /// Automatically enabled in Xcode debug builds, disabled in release (.dmg).
+    #if DEBUG
+    var developerMode: Bool = true
+    #else
     var developerMode: Bool = false
+    #endif
 
     /// Current project file path (nil = never saved).
     var projectFilePath: URL?
