@@ -1,5 +1,47 @@
 // StatsTestCatalog.swift — Textbook-level mathematical descriptions
 // for every statistical test in the Stats Wiki.
+//
+// ─── Formula Markup Schema ────────────────────────────────────────
+//
+// The `hypotheses` and `testStatistic` fields are rendered by
+// `formulaText()` in StatsTestDetailDialog.swift, which recognises
+// three line types:
+//
+//   1. $...$   — LaTeX formula rendered as an image via the Python
+//                engine. Use for ALL mathematical expressions:
+//                fractions, subscripts, Greek letters, equalities,
+//                inequalities, etc.
+//
+//                Examples:
+//                  $H_0: \mu_1 = \mu_2$
+//                  $t = \frac{\bar{x}_1 - \bar{x}_2}{s_p \sqrt{\frac{1}{n_1} + \frac{1}{n_2}}}$
+//
+//   2. #...    — Explanatory text rendered in italic. Use for
+//                definitions and "where" clauses.
+//
+//                Examples:
+//                  # where s_p is the pooled standard deviation.
+//                  # with df = n₁ + n₂ - 2 degrees of freedom.
+//
+//   3. Plain   — Monospaced text. Use for procedural descriptions
+//                and non-mathematical content.
+//
+//                Examples:
+//                  For m simultaneous tests at level α:
+//                  Step 1: Order p-values smallest to largest
+//
+// Rules:
+//   • NEVER rely on Unicode math auto-detection. Always wrap
+//     mathematical expressions in explicit $...$ delimiters.
+//   • Each $...$ renders as a separate image line; put each formula
+//     on its own line.
+//   • Use standard LaTeX: \frac{}{}, \bar{}, \hat{}, \sqrt{},
+//     \sum, \prod, \mu, \sigma, \alpha, \chi^2, \neq, \leq, \geq,
+//     \text{} (for text within math mode).
+//   • For subscripts: x_1, \bar{x}_i, n_{\text{total}}
+//   • For hypothesis statements: $H_0: \mu_1 = \mu_2$
+//
+// ──────────────────────────────────────────────────────────────────
 
 import Foundation
 
@@ -40,14 +82,13 @@ enum StatsTestCatalog {
             name: "Unpaired (Independent) t-test",
             aliases: ["Student's t-test", "Two-sample t-test"],
             hypotheses: """
-                H\u{2080}: \u{03BC}\u{2081} = \u{03BC}\u{2082}
-                H\u{2081}: \u{03BC}\u{2081} \u{2260} \u{03BC}\u{2082}
+                $H_0: \\mu_1 = \\mu_2$
+                $H_1: \\mu_1 \\neq \\mu_2$
                 """,
             testStatistic: """
-                t = (x\u{0305}\u{2081} \u{2212} x\u{0305}\u{2082}) / \u{221A}(s\u{00B2}p (1/n\u{2081} + 1/n\u{2082}))
-
-                where the pooled variance is:
-                s\u{00B2}p = ((n\u{2081}\u{2212}1)s\u{2081}\u{00B2} + (n\u{2082}\u{2212}1)s\u{2082}\u{00B2}) / (n\u{2081} + n\u{2082} \u{2212} 2)
+                $t = \\frac{\\bar{x}_1 - \\bar{x}_2}{\\sqrt{s_p^2 \\left(\\frac{1}{n_1} + \\frac{1}{n_2}\\right)}}$
+                # where the pooled variance is:
+                $s_p^2 = \\frac{(n_1 - 1)s_1^2 + (n_2 - 1)s_2^2}{n_1 + n_2 - 2}$
                 """,
             distribution: "t-distribution with df = n\u{2081} + n\u{2082} \u{2212} 2",
             assumptions: [
@@ -72,14 +113,13 @@ enum StatsTestCatalog {
             name: "Welch's t-test",
             aliases: ["Unequal variance t-test"],
             hypotheses: """
-                H\u{2080}: \u{03BC}\u{2081} = \u{03BC}\u{2082}
-                H\u{2081}: \u{03BC}\u{2081} \u{2260} \u{03BC}\u{2082}
+                $H_0: \\mu_1 = \\mu_2$
+                $H_1: \\mu_1 \\neq \\mu_2$
                 """,
             testStatistic: """
-                t = (x\u{0305}\u{2081} \u{2212} x\u{0305}\u{2082}) / \u{221A}(s\u{2081}\u{00B2}/n\u{2081} + s\u{2082}\u{00B2}/n\u{2082})
-
-                Welch-Satterthwaite degrees of freedom:
-                df = (s\u{2081}\u{00B2}/n\u{2081} + s\u{2082}\u{00B2}/n\u{2082})\u{00B2} / ((s\u{2081}\u{00B2}/n\u{2081})\u{00B2}/(n\u{2081}\u{2212}1) + (s\u{2082}\u{00B2}/n\u{2082})\u{00B2}/(n\u{2082}\u{2212}1))
+                $t = \\frac{\\bar{x}_1 - \\bar{x}_2}{\\sqrt{\\frac{s_1^2}{n_1} + \\frac{s_2^2}{n_2}}}$
+                # Welch-Satterthwaite degrees of freedom:
+                $df = \\frac{\\left(\\frac{s_1^2}{n_1} + \\frac{s_2^2}{n_2}\\right)^2}{\\frac{(s_1^2/n_1)^2}{n_1 - 1} + \\frac{(s_2^2/n_2)^2}{n_2 - 1}}$
                 """,
             distribution: "t-distribution with Welch-Satterthwaite adjusted df (not necessarily integer)",
             assumptions: [
@@ -103,15 +143,15 @@ enum StatsTestCatalog {
             name: "Paired t-test",
             aliases: ["Dependent t-test", "Matched-pairs t-test"],
             hypotheses: """
-                H\u{2080}: \u{03BC}d = 0  (where d = paired differences)
-                H\u{2081}: \u{03BC}d \u{2260} 0
+                $H_0: \\mu_d = 0$
+                # where d = paired differences.
+                $H_1: \\mu_d \\neq 0$
                 """,
             testStatistic: """
-                t = d\u{0305} / (sd / \u{221A}n)
-
-                where d\u{0305} = mean of differences,
-                sd = standard deviation of differences,
-                n = number of pairs
+                $t = \\frac{\\bar{d}}{s_d / \\sqrt{n}}$
+                # where d-bar = mean of differences,
+                # s_d = standard deviation of differences,
+                # n = number of pairs.
                 """,
             distribution: "t-distribution with df = n \u{2212} 1",
             assumptions: [
@@ -136,16 +176,15 @@ enum StatsTestCatalog {
             name: "One-way ANOVA",
             aliases: ["Analysis of variance", "F-test for k groups"],
             hypotheses: """
-                H\u{2080}: \u{03BC}\u{2081} = \u{03BC}\u{2082} = \u{2026} = \u{03BC}k
-                H\u{2081}: At least one \u{03BC}i differs
+                $H_0: \\mu_1 = \\mu_2 = \\cdots = \\mu_k$
+                $H_1: \\text{At least one } \\mu_i \\text{ differs}$
                 """,
             testStatistic: """
-                F = MS_between / MS_within
-
-                SS_between = \u{03A3} n\u{1D62}(x\u{0305}\u{1D62} \u{2212} x\u{0305})\u{00B2}
-                SS_within  = \u{03A3}\u{03A3} (x\u{1D62}j \u{2212} x\u{0305}\u{1D62})\u{00B2}
-                MS_between = SS_between / (k \u{2212} 1)
-                MS_within  = SS_within / (N \u{2212} k)
+                $F = \\frac{MS_{\\text{between}}}{MS_{\\text{within}}}$
+                $SS_{\\text{between}} = \\sum n_i (\\bar{x}_i - \\bar{x})^2$
+                $SS_{\\text{within}} = \\sum \\sum (x_{ij} - \\bar{x}_i)^2$
+                $MS_{\\text{between}} = \\frac{SS_{\\text{between}}}{k - 1}$
+                $MS_{\\text{within}} = \\frac{SS_{\\text{within}}}{N - k}$
                 """,
             distribution: "F-distribution with df\u{2081} = k \u{2212} 1, df\u{2082} = N \u{2212} k",
             assumptions: [
@@ -170,15 +209,15 @@ enum StatsTestCatalog {
             name: "Welch's ANOVA",
             aliases: ["Welch's F-test"],
             hypotheses: """
-                H\u{2080}: \u{03BC}\u{2081} = \u{03BC}\u{2082} = \u{2026} = \u{03BC}k
-                H\u{2081}: At least one \u{03BC}i differs
+                $H_0: \\mu_1 = \\mu_2 = \\cdots = \\mu_k$
+                $H_1: \\text{At least one } \\mu_i \\text{ differs}$
                 """,
             testStatistic: """
                 Uses weighted group means and a modified F-statistic
-                that does not pool variances. Weights: w\u{1D62} = n\u{1D62} / s\u{1D62}\u{00B2}
-
-                The test statistic follows an approximate F-distribution
-                with adjusted degrees of freedom.
+                that does not pool variances.
+                $w_i = \\frac{n_i}{s_i^2}$
+                # The test statistic follows an approximate F-distribution
+                # with adjusted degrees of freedom.
                 """,
             distribution: "Approximate F-distribution with adjusted degrees of freedom",
             assumptions: [
@@ -202,16 +241,16 @@ enum StatsTestCatalog {
             name: "Repeated Measures ANOVA",
             aliases: ["Within-subjects ANOVA"],
             hypotheses: """
-                H\u{2080}: \u{03BC}\u{2081} = \u{03BC}\u{2082} = \u{2026} = \u{03BC}k  (across conditions)
-                H\u{2081}: At least one condition mean differs
+                $H_0: \\mu_1 = \\mu_2 = \\cdots = \\mu_k$
+                # across conditions.
+                $H_1: \\text{At least one condition mean differs}$
                 """,
             testStatistic: """
-                F = MS_conditions / MS_error
-
+                $F = \\frac{MS_{\\text{conditions}}}{MS_{\\text{error}}}$
                 Total variance is partitioned into:
-                SS_total = SS_between_subjects + SS_conditions + SS_error
-                df_conditions = k \u{2212} 1
-                df_error = (n \u{2212} 1)(k \u{2212} 1)
+                $SS_{\\text{total}} = SS_{\\text{between subjects}} + SS_{\\text{conditions}} + SS_{\\text{error}}$
+                $df_{\\text{conditions}} = k - 1$
+                $df_{\\text{error}} = (n - 1)(k - 1)$
                 """,
             distribution: "F-distribution with df\u{2081} = k \u{2212} 1, df\u{2082} = (n \u{2212} 1)(k \u{2212} 1)",
             assumptions: [
@@ -236,17 +275,18 @@ enum StatsTestCatalog {
             name: "Two-way ANOVA",
             aliases: ["Factorial ANOVA", "Two-factor ANOVA"],
             hypotheses: """
-                H\u{2080}A: No main effect of Factor A
-                H\u{2080}B: No main effect of Factor B
-                H\u{2080}AB: No interaction between A and B
+                $H_{0A}: \\text{No main effect of Factor A}$
+                $H_{0B}: \\text{No main effect of Factor B}$
+                $H_{0AB}: \\text{No interaction between A and B}$
                 """,
             testStatistic: """
                 Three separate F-tests (Type III SS):
-
-                F_A  = MS_A / MS_error      (main effect of A)
-                F_B  = MS_B / MS_error      (main effect of B)
-                F_AB = MS_AB / MS_error     (interaction)
-
+                $F_A = \\frac{MS_A}{MS_{\\text{error}}}$
+                # main effect of A.
+                $F_B = \\frac{MS_B}{MS_{\\text{error}}}$
+                # main effect of B.
+                $F_{AB} = \\frac{MS_{AB}}{MS_{\\text{error}}}$
+                # interaction.
                 Each SS is computed after removing all other effects
                 (Type III sum of squares).
                 """,
@@ -277,15 +317,15 @@ enum StatsTestCatalog {
             name: "One-sample t-test",
             aliases: ["Single-sample t-test"],
             hypotheses: """
-                H\u{2080}: \u{03BC} = \u{03BC}\u{2080}  (population mean equals a hypothesized value)
-                H\u{2081}: \u{03BC} \u{2260} \u{03BC}\u{2080}
+                $H_0: \\mu = \\mu_0$
+                # population mean equals a hypothesized value.
+                $H_1: \\mu \\neq \\mu_0$
                 """,
             testStatistic: """
-                t = (x\u{0305} \u{2212} \u{03BC}\u{2080}) / (s / \u{221A}n)
-
-                where x\u{0305} = sample mean,
-                \u{03BC}\u{2080} = hypothesized value,
-                s = sample standard deviation
+                $t = \\frac{\\bar{x} - \\mu_0}{s / \\sqrt{n}}$
+                # where x-bar = sample mean,
+                # mu_0 = hypothesized value,
+                # s = sample standard deviation.
                 """,
             distribution: "t-distribution with df = n \u{2212} 1",
             assumptions: [
@@ -309,17 +349,15 @@ enum StatsTestCatalog {
             name: "Mann-Whitney U test",
             aliases: ["Wilcoxon rank-sum test", "Mann-Whitney-Wilcoxon"],
             hypotheses: """
-                H\u{2080}: The two groups have the same distribution
-                H\u{2081}: The distributions differ (one group tends to have larger values)
+                $H_0: \\text{The two groups have the same distribution}$
+                $H_1: \\text{The distributions differ}$
                 """,
             testStatistic: """
-                U = n\u{2081}n\u{2082} + n\u{2081}(n\u{2081}+1)/2 \u{2212} R\u{2081}
-
-                where R\u{2081} = sum of ranks in group 1
-                (after ranking all observations together).
-
+                $U = n_1 n_2 + \\frac{n_1(n_1 + 1)}{2} - R_1$
+                # where R_1 = sum of ranks in group 1
+                # (after ranking all observations together).
                 For large samples, use normal approximation:
-                z = (U \u{2212} n\u{2081}n\u{2082}/2) / \u{221A}(n\u{2081}n\u{2082}(n\u{2081}+n\u{2082}+1)/12)
+                $z = \\frac{U - \\frac{n_1 n_2}{2}}{\\sqrt{\\frac{n_1 n_2 (n_1 + n_2 + 1)}{12}}}$
                 """,
             distribution: "Exact tables for small n; normal approximation for large n",
             assumptions: [
@@ -344,15 +382,15 @@ enum StatsTestCatalog {
             name: "Wilcoxon Signed-Rank test",
             aliases: ["Wilcoxon matched-pairs signed-rank test"],
             hypotheses: """
-                H\u{2080}: Median of differences = 0
-                H\u{2081}: Median of differences \u{2260} 0
+                $H_0: \\text{Median of differences} = 0$
+                $H_1: \\text{Median of differences} \\neq 0$
                 """,
             testStatistic: """
-                1. Compute differences d\u{1D62} = x\u{1D62} \u{2212} y\u{1D62}
-                2. Discard zeros, rank |d\u{1D62}|
-                3. Sum ranks of positive differences: T\u{207A}
-                4. Sum ranks of negative differences: T\u{207B}
-                5. T = min(T\u{207A}, T\u{207B})
+                $1.\\; \\text{Compute differences } d_i = x_i - y_i$
+                $2.\\; \\text{Discard zeros, rank } |d_i|$
+                $3.\\; T^+ = \\text{sum of ranks of positive differences}$
+                $4.\\; T^- = \\text{sum of ranks of negative differences}$
+                $5.\\; T = \\min(T^+, T^-)$
                 """,
             distribution: "Exact tables for small n; normal approximation for n > 25",
             assumptions: [
@@ -377,15 +415,14 @@ enum StatsTestCatalog {
             name: "Kruskal-Wallis test",
             aliases: ["Kruskal-Wallis H test", "Kruskal-Wallis one-way ANOVA by ranks"],
             hypotheses: """
-                H\u{2080}: All k populations have the same distribution
-                H\u{2081}: At least one population differs
+                $H_0: \\text{All } k \\text{ populations have the same distribution}$
+                $H_1: \\text{At least one population differs}$
                 """,
             testStatistic: """
-                H = (12 / N(N+1)) \u{03A3}(R\u{1D62}\u{00B2} / n\u{1D62}) \u{2212} 3(N+1)
-
-                where R\u{1D62} = sum of ranks in group i,
-                N = total number of observations,
-                n\u{1D62} = number in group i.
+                $H = \\frac{12}{N(N+1)} \\sum \\frac{R_i^2}{n_i} - 3(N+1)$
+                # where R_i = sum of ranks in group i,
+                # N = total number of observations,
+                # n_i = number in group i.
                 """,
             distribution: "\u{03C7}\u{00B2} distribution with df = k \u{2212} 1 (for large samples)",
             assumptions: [
@@ -410,15 +447,14 @@ enum StatsTestCatalog {
             name: "Friedman test",
             aliases: ["Friedman two-way ANOVA by ranks"],
             hypotheses: """
-                H\u{2080}: All k treatments have the same effect
-                H\u{2081}: At least one treatment differs
+                $H_0: \\text{All } k \\text{ treatments have the same effect}$
+                $H_1: \\text{At least one treatment differs}$
                 """,
             testStatistic: """
-                \u{03C7}\u{00B2}F = (12 / bk(k+1)) \u{03A3}R\u{2C7C}\u{00B2} \u{2212} 3b(k+1)
-
-                where b = number of blocks (subjects),
-                k = number of treatments (conditions),
-                R\u{2C7C} = sum of ranks for treatment j.
+                $\\chi^2_F = \\frac{12}{bk(k+1)} \\sum R_j^2 - 3b(k+1)$
+                # where b = number of blocks (subjects),
+                # k = number of treatments (conditions),
+                # R_j = sum of ranks for treatment j.
                 """,
             distribution: "\u{03C7}\u{00B2} distribution with df = k \u{2212} 1 (for large b or k)",
             assumptions: [
@@ -443,14 +479,13 @@ enum StatsTestCatalog {
             name: "Chi-square test of independence",
             aliases: ["Pearson's chi-square test", "\u{03C7}\u{00B2} test"],
             hypotheses: """
-                H\u{2080}: The two categorical variables are independent
-                H\u{2081}: The two variables are associated
+                $H_0: \\text{The two categorical variables are independent}$
+                $H_1: \\text{The two variables are associated}$
                 """,
             testStatistic: """
-                \u{03C7}\u{00B2} = \u{03A3}\u{03A3} (O\u{1D62}\u{2C7C} \u{2212} E\u{1D62}\u{2C7C})\u{00B2} / E\u{1D62}\u{2C7C}
-
-                where E\u{1D62}\u{2C7C} = (row total \u{00D7} column total) / N
-                O\u{1D62}\u{2C7C} = observed count in cell (i, j)
+                $\\chi^2 = \\sum \\sum \\frac{(O_{ij} - E_{ij})^2}{E_{ij}}$
+                # where E_ij = (row total x column total) / N,
+                # O_ij = observed count in cell (i, j).
                 """,
             distribution: "\u{03C7}\u{00B2} distribution with df = (r \u{2212} 1)(c \u{2212} 1)",
             assumptions: [
@@ -475,19 +510,12 @@ enum StatsTestCatalog {
             name: "Fisher's exact test",
             aliases: ["Fisher-Irwin test"],
             hypotheses: """
-                H\u{2080}: The two variables are independent (odds ratio = 1)
-                H\u{2081}: The two variables are associated (odds ratio \u{2260} 1)
+                $H_0: \\text{The two variables are independent (odds ratio} = 1\\text{)}$
+                $H_1: \\text{The two variables are associated (odds ratio} \\neq 1\\text{)}$
                 """,
             testStatistic: """
-                For a 2\u{00D7}2 table:
-                \u{250C}\u{2500}\u{2500}\u{2500}\u{252C}\u{2500}\u{2500}\u{2500}\u{2510}
-                \u{2502} a \u{2502} b \u{2502}
-                \u{251C}\u{2500}\u{2500}\u{2500}\u{253C}\u{2500}\u{2500}\u{2500}\u{2524}
-                \u{2502} c \u{2502} d \u{2502}
-                \u{2514}\u{2500}\u{2500}\u{2500}\u{2534}\u{2500}\u{2500}\u{2500}\u{2518}
-
-                p = (a+b)!(c+d)!(a+c)!(b+d)! / (N! a! b! c! d!)
-
+                For a 2x2 table with cells a, b, c, d:
+                $p = \\frac{(a+b)!\\,(c+d)!\\,(a+c)!\\,(b+d)!}{N!\\, a!\\, b!\\, c!\\, d!}$
                 Sum probabilities for all tables as extreme or more
                 extreme than the observed, given fixed marginals.
                 """,
@@ -513,14 +541,13 @@ enum StatsTestCatalog {
             name: "Chi-square goodness of fit",
             aliases: ["One-sample chi-square test"],
             hypotheses: """
-                H\u{2080}: Observed frequencies match the expected distribution
-                H\u{2081}: Observed frequencies differ from expected
+                $H_0: \\text{Observed frequencies match the expected distribution}$
+                $H_1: \\text{Observed frequencies differ from expected}$
                 """,
             testStatistic: """
-                \u{03C7}\u{00B2} = \u{03A3} (O\u{1D62} \u{2212} E\u{1D62})\u{00B2} / E\u{1D62}
-
-                where O\u{1D62} = observed count in category i,
-                E\u{1D62} = expected count in category i.
+                $\\chi^2 = \\sum \\frac{(O_i - E_i)^2}{E_i}$
+                # where O_i = observed count in category i,
+                # E_i = expected count in category i.
                 """,
             distribution: "\u{03C7}\u{00B2} distribution with df = k \u{2212} 1 (or k \u{2212} 1 \u{2212} p if p parameters were estimated from the data)",
             assumptions: [
@@ -545,20 +572,14 @@ enum StatsTestCatalog {
             name: "McNemar's test",
             aliases: ["McNemar's chi-square test"],
             hypotheses: """
-                H\u{2080}: The marginal proportions are equal (p\u{2081}. = p.\u{2081})
-                H\u{2081}: The marginal proportions differ
+                $H_0: \\text{The marginal proportions are equal}$
+                $H_1: \\text{The marginal proportions differ}$
                 """,
             testStatistic: """
-                For a paired 2\u{00D7}2 table:
-                \u{250C}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{252C}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2510}
-                \u{2502}  a   \u{2502}  b   \u{2502}   (concordant and
-                \u{251C}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{253C}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2524}    discordant pairs)
-                \u{2502}  c   \u{2502}  d   \u{2502}
-                \u{2514}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2534}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2518}
-
-                \u{03C7}\u{00B2} = (b \u{2212} c)\u{00B2} / (b + c)
-
-                Only discordant pairs (b and c) contribute.
+                For a paired 2x2 table with concordant (a, d) and
+                discordant (b, c) pairs:
+                $\\chi^2 = \\frac{(b - c)^2}{b + c}$
+                # Only discordant pairs (b and c) contribute.
                 """,
             distribution: "\u{03C7}\u{00B2} distribution with df = 1",
             assumptions: [
@@ -583,14 +604,14 @@ enum StatsTestCatalog {
             name: "Pearson correlation coefficient",
             aliases: ["Pearson's r", "Product-moment correlation"],
             hypotheses: """
-                H\u{2080}: \u{03C1} = 0  (no linear association)
-                H\u{2081}: \u{03C1} \u{2260} 0
+                $H_0: \\rho = 0$
+                # no linear association.
+                $H_1: \\rho \\neq 0$
                 """,
             testStatistic: """
-                r = \u{03A3}(x\u{1D62} \u{2212} x\u{0305})(y\u{1D62} \u{2212} y\u{0305}) / \u{221A}(\u{03A3}(x\u{1D62} \u{2212} x\u{0305})\u{00B2} \u{03A3}(y\u{1D62} \u{2212} y\u{0305})\u{00B2})
-
+                $r = \\frac{\\sum (x_i - \\bar{x})(y_i - \\bar{y})}{\\sqrt{\\sum (x_i - \\bar{x})^2 \\sum (y_i - \\bar{y})^2}}$
                 Test statistic:
-                t = r\u{221A}(n\u{2212}2) / \u{221A}(1 \u{2212} r\u{00B2})
+                $t = \\frac{r \\sqrt{n - 2}}{\\sqrt{1 - r^2}}$
                 """,
             distribution: "t-distribution with df = n \u{2212} 2 (for the significance test)",
             assumptions: [
@@ -616,16 +637,15 @@ enum StatsTestCatalog {
             name: "Spearman rank correlation",
             aliases: ["Spearman's rho", "Spearman's r\u{209B}"],
             hypotheses: """
-                H\u{2080}: No monotonic association (\u{03C1}s = 0)
-                H\u{2081}: Monotonic association exists (\u{03C1}s \u{2260} 0)
+                $H_0: \\rho_s = 0$
+                # no monotonic association.
+                $H_1: \\rho_s \\neq 0$
                 """,
             testStatistic: """
-                r\u{209B} = Pearson r computed on the ranks
-
+                $r_s = \\text{Pearson } r \\text{ computed on the ranks}$
                 When there are no ties:
-                r\u{209B} = 1 \u{2212} 6\u{03A3}d\u{1D62}\u{00B2} / (n(n\u{00B2} \u{2212} 1))
-
-                where d\u{1D62} = rank(x\u{1D62}) \u{2212} rank(y\u{1D62})
+                $r_s = 1 - \\frac{6 \\sum d_i^2}{n(n^2 - 1)}$
+                # where d_i = rank(x_i) - rank(y_i).
                 """,
             distribution: "Exact tables for small n; t-approximation with df = n \u{2212} 2 for large n",
             assumptions: [
@@ -650,17 +670,17 @@ enum StatsTestCatalog {
             name: "Simple linear regression",
             aliases: ["Ordinary least squares (OLS)", "Linear model"],
             hypotheses: """
-                H\u{2080}: \u{03B2}\u{2081} = 0  (slope is zero; X does not predict Y)
-                H\u{2081}: \u{03B2}\u{2081} \u{2260} 0
+                $H_0: \\beta_1 = 0$
+                # slope is zero; X does not predict Y.
+                $H_1: \\beta_1 \\neq 0$
                 """,
             testStatistic: """
-                y\u{0302} = a + bx
-
-                b = \u{03A3}(x\u{1D62} \u{2212} x\u{0305})(y\u{1D62} \u{2212} y\u{0305}) / \u{03A3}(x\u{1D62} \u{2212} x\u{0305})\u{00B2}
-                a = y\u{0305} \u{2212} bx\u{0305}
-
-                R\u{00B2} = SS_regression / SS_total
-                F = MS_regression / MS_residual  (df\u{2081} = 1, df\u{2082} = n \u{2212} 2)
+                $\\hat{y} = a + bx$
+                $b = \\frac{\\sum (x_i - \\bar{x})(y_i - \\bar{y})}{\\sum (x_i - \\bar{x})^2}$
+                $a = \\bar{y} - b\\bar{x}$
+                $R^2 = \\frac{SS_{\\text{regression}}}{SS_{\\text{total}}}$
+                $F = \\frac{MS_{\\text{regression}}}{MS_{\\text{residual}}}$
+                # with df_1 = 1, df_2 = n - 2.
                 """,
             distribution: "F-distribution with df\u{2081} = 1, df\u{2082} = n \u{2212} 2 for the overall model; t with df = n \u{2212} 2 for the slope",
             assumptions: [
@@ -686,18 +706,16 @@ enum StatsTestCatalog {
             name: "Log-rank test",
             aliases: ["Mantel-Cox test"],
             hypotheses: """
-                H\u{2080}: Survival functions are equal across groups
-                H\u{2081}: At least one group's survival function differs
+                $H_0: \\text{Survival functions are equal across groups}$
+                $H_1: \\text{At least one group's survival function differs}$
                 """,
             testStatistic: """
-                \u{03C7}\u{00B2} = (\u{03A3}(O\u{2081}\u{2C7C} \u{2212} E\u{2081}\u{2C7C}))\u{00B2} / \u{03A3} Var\u{2081}\u{2C7C}
-
+                $\\chi^2 = \\frac{\\left(\\sum (O_{1j} - E_{1j})\\right)^2}{\\sum \\text{Var}_{1j}}$
                 At each event time j:
-                E\u{2081}\u{2C7C} = d\u{2C7C} \u{00D7} n\u{2081}\u{2C7C} / n\u{2C7C}
-
-                where d\u{2C7C} = total events at time j,
-                n\u{2081}\u{2C7C} = at-risk in group 1,
-                n\u{2C7C} = total at-risk.
+                $E_{1j} = \\frac{d_j \\times n_{1j}}{n_j}$
+                # where d_j = total events at time j,
+                # n_{1j} = at-risk in group 1,
+                # n_j = total at-risk.
                 """,
             distribution: "\u{03C7}\u{00B2} distribution with df = k \u{2212} 1 (k = number of groups)",
             assumptions: [
@@ -721,17 +739,15 @@ enum StatsTestCatalog {
             name: "Kaplan-Meier estimator",
             aliases: ["Product-limit estimator", "KM curve"],
             hypotheses: """
-                (Descriptive method \u{2014} no hypothesis test per se.
-                Use the log-rank test to compare KM curves between groups.)
+                Descriptive method -- no hypothesis test per se.
+                Use the log-rank test to compare KM curves between groups.
                 """,
             testStatistic: """
-                S\u{0302}(t) = \u{220F}(1 \u{2212} d\u{1D62} / n\u{1D62})  for all t\u{1D62} \u{2264} t
-
-                where d\u{1D62} = events at time t\u{1D62},
-                n\u{1D62} = number at risk just before t\u{1D62}.
-
+                $\\hat{S}(t) = \\prod_{t_i \\leq t} \\left(1 - \\frac{d_i}{n_i}\\right)$
+                # where d_i = events at time t_i,
+                # n_i = number at risk just before t_i.
                 Greenwood variance:
-                Var(S\u{0302}(t)) = S\u{0302}(t)\u{00B2} \u{03A3} d\u{1D62} / (n\u{1D62}(n\u{1D62} \u{2212} d\u{1D62}))
+                $\\text{Var}(\\hat{S}(t)) = \\hat{S}(t)^2 \\sum \\frac{d_i}{n_i(n_i - d_i)}$
                 """,
             distribution: "Pointwise confidence intervals use log or log-log transformation",
             assumptions: [
@@ -741,7 +757,7 @@ enum StatsTestCatalog {
             ],
             whenToUse: "Estimating the survival function from censored time-to-event data. Produces the classic step-function survival curve.",
             whenNotToUse: "When you need to adjust for covariates (use Cox regression) or when there is no censoring (simpler methods suffice).",
-            notes: "Censored observations are indicated by a + or tick on the curve. The KM estimator handles right-censoring naturally. Median survival is the time at which S\u{0302}(t) = 0.5.",
+            notes: "Censored observations are indicated by a + or tick on the curve. The KM estimator handles right-censoring naturally. Median survival is the time at which S-hat(t) = 0.5.",
             references: [
                 "Collett, D. (2015). Modelling Survival Data in Medical Research, 3rd ed. CRC Press.",
                 "Klein, J.P. & Moeschberger, M.L. (2003). Survival Analysis, 2nd ed. Springer."
@@ -757,14 +773,13 @@ enum StatsTestCatalog {
             aliases: ["Tukey-Kramer test", "Tukey's range test"],
             hypotheses: """
                 For each pair (i, j):
-                H\u{2080}: \u{03BC}\u{1D62} = \u{03BC}\u{2C7C}
-                H\u{2081}: \u{03BC}\u{1D62} \u{2260} \u{03BC}\u{2C7C}
+                $H_0: \\mu_i = \\mu_j$
+                $H_1: \\mu_i \\neq \\mu_j$
                 """,
             testStatistic: """
-                q = (x\u{0305}\u{1D62} \u{2212} x\u{0305}\u{2C7C}) / \u{221A}(MS_within / n)
-
+                $q = \\frac{\\bar{x}_i - \\bar{x}_j}{\\sqrt{MS_{\\text{within}} / n}}$
                 For unequal group sizes (Tukey-Kramer):
-                q = (x\u{0305}\u{1D62} \u{2212} x\u{0305}\u{2C7C}) / \u{221A}(MS_within \u{00D7} (1/n\u{1D62} + 1/n\u{2C7C}) / 2)
+                $q = \\frac{\\bar{x}_i - \\bar{x}_j}{\\sqrt{\\frac{MS_{\\text{within}}}{2} \\left(\\frac{1}{n_i} + \\frac{1}{n_j}\\right)}}$
                 """,
             distribution: "Studentized range distribution with k groups and df = N \u{2212} k",
             assumptions: [
@@ -789,15 +804,13 @@ enum StatsTestCatalog {
             aliases: ["Dunn's multiple comparison test"],
             hypotheses: """
                 For each pair (i, j):
-                H\u{2080}: Group i and group j have the same distribution
-                H\u{2081}: The distributions differ
+                $H_0: \\text{Group } i \\text{ and group } j \\text{ have the same distribution}$
+                $H_1: \\text{The distributions differ}$
                 """,
             testStatistic: """
-                z = (R\u{0305}\u{1D62} \u{2212} R\u{0305}\u{2C7C}) / \u{221A}((N(N+1)/12)(1/n\u{1D62} + 1/n\u{2C7C}))
-
-                where R\u{0305}\u{1D62} = mean rank for group i,
-                N = total sample size.
-
+                $z = \\frac{\\bar{R}_i - \\bar{R}_j}{\\sqrt{\\frac{N(N+1)}{12} \\left(\\frac{1}{n_i} + \\frac{1}{n_j}\\right)}}$
+                # where R-bar_i = mean rank for group i,
+                # N = total sample size.
                 Apply Bonferroni or Holm correction to the p-values.
                 """,
             distribution: "Standard normal (z) for each pairwise comparison",
@@ -823,14 +836,13 @@ enum StatsTestCatalog {
             aliases: ["Dunnett's many-to-one comparisons"],
             hypotheses: """
                 For each treatment i vs control:
-                H\u{2080}: \u{03BC}\u{1D62} = \u{03BC}_control
-                H\u{2081}: \u{03BC}\u{1D62} \u{2260} \u{03BC}_control
+                $H_0: \\mu_i = \\mu_{\\text{control}}$
+                $H_1: \\mu_i \\neq \\mu_{\\text{control}}$
                 """,
             testStatistic: """
-                t = (x\u{0305}\u{1D62} \u{2212} x\u{0305}_control) / \u{221A}(MS_within (1/n\u{1D62} + 1/n_control))
-
-                Critical values come from the multivariate t-distribution
-                accounting for the correlation structure between comparisons.
+                $t = \\frac{\\bar{x}_i - \\bar{x}_{\\text{control}}}{\\sqrt{MS_{\\text{within}} \\left(\\frac{1}{n_i} + \\frac{1}{n_{\\text{control}}}\\right)}}$
+                # Critical values come from the multivariate t-distribution
+                # accounting for the correlation structure between comparisons.
                 """,
             distribution: "Multivariate t-distribution with df = N \u{2212} k and k \u{2212} 1 comparisons",
             assumptions: [
@@ -855,14 +867,13 @@ enum StatsTestCatalog {
             aliases: ["Games-Howell posthoc"],
             hypotheses: """
                 For each pair (i, j):
-                H\u{2080}: \u{03BC}\u{1D62} = \u{03BC}\u{2C7C}
-                H\u{2081}: \u{03BC}\u{1D62} \u{2260} \u{03BC}\u{2C7C}
+                $H_0: \\mu_i = \\mu_j$
+                $H_1: \\mu_i \\neq \\mu_j$
                 """,
             testStatistic: """
-                q = (x\u{0305}\u{1D62} \u{2212} x\u{0305}\u{2C7C}) / \u{221A}((s\u{1D62}\u{00B2}/n\u{1D62} + s\u{2C7C}\u{00B2}/n\u{2C7C}) / 2)
-
-                Welch-Satterthwaite df for each pair:
-                df = (s\u{1D62}\u{00B2}/n\u{1D62} + s\u{2C7C}\u{00B2}/n\u{2C7C})\u{00B2} / ((s\u{1D62}\u{00B2}/n\u{1D62})\u{00B2}/(n\u{1D62}\u{2212}1) + (s\u{2C7C}\u{00B2}/n\u{2C7C})\u{00B2}/(n\u{2C7C}\u{2212}1))
+                $q = \\frac{\\bar{x}_i - \\bar{x}_j}{\\sqrt{\\frac{s_i^2/n_i + s_j^2/n_j}{2}}}$
+                # Welch-Satterthwaite df for each pair:
+                $df = \\frac{\\left(\\frac{s_i^2}{n_i} + \\frac{s_j^2}{n_j}\\right)^2}{\\frac{(s_i^2/n_i)^2}{n_i - 1} + \\frac{(s_j^2/n_j)^2}{n_j - 1}}$
                 """,
             distribution: "Studentized range distribution with pair-specific df",
             assumptions: [
@@ -886,18 +897,15 @@ enum StatsTestCatalog {
             name: "Cohen's d (effect size)",
             aliases: ["Standardized mean difference"],
             hypotheses: """
-                (Effect size measure \u{2014} no hypothesis test.
-                Used to quantify the magnitude of a difference.)
+                Effect size measure -- no hypothesis test.
+                Used to quantify the magnitude of a difference.
                 """,
             testStatistic: """
-                d = (x\u{0305}\u{2081} \u{2212} x\u{0305}\u{2082}) / sp
-
-                where sp = \u{221A}(((n\u{2081}\u{2212}1)s\u{2081}\u{00B2} + (n\u{2082}\u{2212}1)s\u{2082}\u{00B2}) / (n\u{2081} + n\u{2082} \u{2212} 2))
-
+                $d = \\frac{\\bar{x}_1 - \\bar{x}_2}{s_p}$
+                # where s_p is the pooled standard deviation:
+                $s_p = \\sqrt{\\frac{(n_1 - 1)s_1^2 + (n_2 - 1)s_2^2}{n_1 + n_2 - 2}}$
                 Conventional thresholds (Cohen, 1988):
-                  Small:   d = 0.2
-                  Medium:  d = 0.5
-                  Large:   d = 0.8
+                $\\text{Small: } d = 0.2 \\quad \\text{Medium: } d = 0.5 \\quad \\text{Large: } d = 0.8$
                 """,
             distribution: "Not a test statistic; no reference distribution",
             assumptions: [
@@ -922,14 +930,15 @@ enum StatsTestCatalog {
             name: "Multiple linear regression",
             aliases: ["Multiple regression", "OLS with multiple predictors"],
             hypotheses: """
-                H\u{2080}: All slopes are zero (\u{03B2}\u{2081} = \u{03B2}\u{2082} = \u{2026} = 0)
-                H\u{2081}: At least one slope is non-zero
+                $H_0: \\beta_1 = \\beta_2 = \\cdots = 0$
+                # all slopes are zero.
+                $H_1: \\text{At least one slope is non-zero}$
                 """,
             testStatistic: """
-                y\u{0302} = \u{03B2}\u{2080} + \u{03B2}\u{2081}x\u{2081} + \u{03B2}\u{2082}x\u{2082} + \u{2026} + \u{03B2}px\u{209A}
-
-                Overall F = (R\u{00B2}/p) / ((1 \u{2212} R\u{00B2})/(n \u{2212} p \u{2212} 1))
-                Individual t\u{1D62} = \u{03B2}\u{0302}\u{1D62} / SE(\u{03B2}\u{0302}\u{1D62})
+                $\\hat{y} = \\beta_0 + \\beta_1 x_1 + \\beta_2 x_2 + \\cdots + \\beta_p x_p$
+                $F = \\frac{R^2 / p}{(1 - R^2) / (n - p - 1)}$
+                $t_i = \\frac{\\hat{\\beta}_i}{SE(\\hat{\\beta}_i)}$
+                # Individual t-test for each coefficient.
                 """,
             distribution: "F with df\u{2081} = p, df\u{2082} = n \u{2212} p \u{2212} 1 (overall); t with df = n \u{2212} p \u{2212} 1 (per coefficient)",
             assumptions: [
@@ -953,15 +962,14 @@ enum StatsTestCatalog {
             name: "Gehan-Wilcoxon test",
             aliases: ["Gehan-Breslow test", "Generalized Wilcoxon test"],
             hypotheses: """
-                H\u{2080}: Survival functions are equal across groups
-                H\u{2081}: Survival functions differ
+                $H_0: \\text{Survival functions are equal across groups}$
+                $H_1: \\text{Survival functions differ}$
                 """,
             testStatistic: """
                 Like the log-rank test but weights each event time
-                by the number at risk n\u{2C7C}, giving more weight to
+                by the number at risk n_j, giving more weight to
                 early events when sample sizes are largest.
-
-                The test statistic follows a \u{03C7}\u{00B2} distribution.
+                $\\text{The test statistic follows a } \\chi^2 \\text{ distribution.}$
                 """,
             distribution: "\u{03C7}\u{00B2} distribution with df = k \u{2212} 1",
             assumptions: [
@@ -982,15 +990,15 @@ enum StatsTestCatalog {
             name: "Cox proportional hazards regression",
             aliases: ["Cox regression", "Cox model"],
             hypotheses: """
-                H\u{2080}: \u{03B2} = 0  (covariate has no effect on hazard)
-                H\u{2081}: \u{03B2} \u{2260} 0
+                $H_0: \\beta = 0$
+                # covariate has no effect on hazard.
+                $H_1: \\beta \\neq 0$
                 """,
             testStatistic: """
-                h(t) = h\u{2080}(t) \u{00D7} exp(\u{03B2}\u{2081}x\u{2081} + \u{03B2}\u{2082}x\u{2082} + \u{2026})
-
-                Hazard ratio: HR = exp(\u{03B2})
-                Coefficients estimated by partial likelihood.
-                Test using Wald \u{03C7}\u{00B2} or likelihood ratio test.
+                $h(t) = h_0(t) \\times \\exp(\\beta_1 x_1 + \\beta_2 x_2 + \\cdots)$
+                $HR = \\exp(\\beta)$
+                # Hazard ratio. Coefficients estimated by partial likelihood.
+                $\\text{Test using Wald } \\chi^2 \\text{ or likelihood ratio test.}$
                 """,
             distribution: "\u{03C7}\u{00B2} (Wald or LR) with df = number of covariates",
             assumptions: [
@@ -1000,7 +1008,7 @@ enum StatsTestCatalog {
             ],
             whenToUse: "Modeling the effect of one or more covariates on survival time, while allowing for censoring.",
             whenNotToUse: "When the proportional hazards assumption is violated (consider stratified Cox or time-varying coefficients).",
-            notes: "The baseline hazard h\u{2080}(t) is left unspecified (semi-parametric). Schoenfeld residuals can diagnose violations of proportional hazards. HR > 1 means increased hazard (worse survival).",
+            notes: "The baseline hazard h_0(t) is left unspecified (semi-parametric). Schoenfeld residuals can diagnose violations of proportional hazards. HR > 1 means increased hazard (worse survival).",
             references: [
                 "Collett, D. (2015). Modelling Survival Data in Medical Research, 3rd ed. CRC Press.",
                 "Klein, J.P. & Moeschberger, M.L. (2003). Survival Analysis, 2nd ed. Springer."
@@ -1012,15 +1020,15 @@ enum StatsTestCatalog {
             name: "Permutation test",
             aliases: ["Randomization test", "Exact test"],
             hypotheses: """
-                H\u{2080}: Group labels are exchangeable (no difference)
-                H\u{2081}: Group assignment matters
+                $H_0: \\text{Group labels are exchangeable (no difference)}$
+                $H_1: \\text{Group assignment matters}$
                 """,
             testStatistic: """
                 1. Choose a test statistic (e.g. difference in means).
-                2. Compute it for the observed data: T_obs.
-                3. Randomly permute group labels many times (or enumerate all permutations).
+                $2.\\; \\text{Compute it for the observed data: } T_{\\text{obs}}$
+                3. Randomly permute group labels many times.
                 4. For each permutation, compute the test statistic.
-                5. p = proportion of permuted statistics \u{2265} |T_obs|.
+                $5.\\; p = \\text{proportion of permuted statistics} \\geq |T_{\\text{obs}}|$
                 """,
             distribution: "Empirical distribution from permutations (distribution-free)",
             assumptions: [
@@ -1041,15 +1049,18 @@ enum StatsTestCatalog {
             name: "Kolmogorov-Smirnov test",
             aliases: ["KS test", "K-S test"],
             hypotheses: """
-                One-sample: H\u{2080}: Data follow the specified distribution
-                Two-sample: H\u{2080}: Both samples come from the same distribution
+                $H_0: \\text{Data follow the specified distribution}$
+                # (one-sample) or:
+                $H_0: \\text{Both samples come from the same distribution}$
+                # (two-sample).
                 """,
             testStatistic: """
-                D = max |F_n(x) \u{2212} F\u{2080}(x)|   (one-sample)
-                D = max |F\u{2081}(x) \u{2212} F\u{2082}(x)|   (two-sample)
-
-                where F_n(x) = empirical CDF,
-                F\u{2080}(x) = theoretical CDF.
+                $D = \\max |F_n(x) - F_0(x)|$
+                # one-sample.
+                $D = \\max |F_1(x) - F_2(x)|$
+                # two-sample.
+                # where F_n(x) = empirical CDF,
+                # F_0(x) = theoretical CDF.
                 """,
             distribution: "Kolmogorov-Smirnov distribution (exact tables or asymptotic)",
             assumptions: [
@@ -1062,6 +1073,195 @@ enum StatsTestCatalog {
             references: [
                 "Lehmann, E.L. & Romano, J.P. (2005). Testing Statistical Hypotheses, 3rd ed. Springer.",
                 "Casella, G. & Berger, R.L. (2002). Statistical Inference, 2nd ed. Cengage. §8.3.4."
+            ]
+        ),
+
+        // ───────────────────────────────────────────────
+        // Multiple Testing Corrections
+        // ───────────────────────────────────────────────
+
+        StatsTestDetail(
+            id: "bonferroni",
+            name: "Bonferroni Correction",
+            aliases: ["Bonferroni adjustment"],
+            hypotheses: """
+                For m simultaneous tests at level alpha:
+                $\\text{Reject } H_0^{(i)} \\text{ if } p^{(i)} \\leq \\alpha / m$
+                """,
+            testStatistic: """
+                $\\alpha_{\\text{adj}} = \\frac{\\alpha}{m}$
+                # where m = number of comparisons.
+                Equivalently, multiply each p-value by m:
+                $p_{\\text{adj}}^{(i)} = \\min(m \\times p^{(i)},\\; 1)$
+                """,
+            distribution: "Uses the original test's distribution. Only adjusts the threshold.",
+            assumptions: [
+                "Valid for any dependency structure (conservative)",
+                "Controls family-wise error rate (FWER) at level \u{03B1}"
+            ],
+            whenToUse: "When the number of comparisons is small and strict FWER control is essential (e.g., confirmatory clinical trials).",
+            whenNotToUse: "When many tests are performed (becomes overly conservative, inflating Type II error). Use Holm-Bonferroni or BH-FDR instead.",
+            notes: "The simplest correction but often too conservative. For k groups, ANOVA posthoc produces m = k(k-1)/2 pairwise comparisons. Example: 5 groups = 10 comparisons, so \u{03B1}_adj = 0.05/10 = 0.005. Prism uses this as the default for Dunnett-type comparisons.",
+            references: [
+                "Bonferroni, C.E. (1936). Teoria statistica delle classi e calcolo delle probabilit\u{00E0}.",
+                "Motulsky, H.J. (2014). Intuitive Biostatistics, 4th ed. Oxford. Ch. 22.",
+                "GraphPad Prism Guide: Multiple comparisons corrections."
+            ]
+        ),
+
+        StatsTestDetail(
+            id: "holm_bonferroni",
+            name: "Holm-Bonferroni Method (Step-Down)",
+            aliases: ["Holm's method", "Sequential Bonferroni", "Holm's step-down"],
+            hypotheses: """
+                $\\text{Order p-values: } p_{(1)} \\leq p_{(2)} \\leq \\cdots \\leq p_{(m)}$
+                $\\text{Reject } H_{(i)} \\text{ if } p_{(i)} \\leq \\frac{\\alpha}{m - i + 1} \\text{ for all } j \\leq i$
+                """,
+            testStatistic: """
+                Step-down procedure:
+                $1.\\; \\text{Sort p-values: } p_{(1)} \\leq p_{(2)} \\leq \\cdots \\leq p_{(m)}$
+                $2.\\; \\text{Compare } p_{(i)} \\text{ to } \\frac{\\alpha}{m - i + 1}$
+                3. Reject all H(j) for j <= k, where k is the largest i
+                such that p(i) <= alpha/(m - i + 1).
+                Adjusted p-values:
+                $p_{\\text{adj}(i)} = \\max_{j \\leq i} \\left\\{ (m - j + 1) \\times p_{(j)} \\right\\}$
+                """,
+            distribution: "Uses the original test's distribution. Only adjusts thresholds sequentially.",
+            assumptions: [
+                "Valid for ANY dependency structure between tests",
+                "Uniformly more powerful than Bonferroni",
+                "Controls FWER at level \u{03B1}"
+            ],
+            whenToUse: "Default recommendation for most multiple testing situations. Always at least as powerful as Bonferroni, often substantially more powerful. Refraction uses this as the default correction.",
+            whenNotToUse: "When false discovery rate control is sufficient (use Benjamini-Hochberg for more power).",
+            notes: "Holm's method is uniformly more powerful than Bonferroni \u{2014} it can never reject fewer hypotheses. It requires no assumptions about the dependency structure between tests, making it universally applicable. This is Refraction's default multiple comparison correction.",
+            references: [
+                "Holm, S. (1979). A simple sequentially rejective multiple test procedure. Scandinavian Journal of Statistics, 6(2), 65\u{2013}70.",
+                "Motulsky, H.J. (2014). Intuitive Biostatistics, 4th ed. Oxford. Ch. 22.",
+                "GraphPad Prism Guide: Holm-\u{0160}id\u{00E1}k and Holm-Bonferroni methods."
+            ]
+        ),
+
+        StatsTestDetail(
+            id: "benjamini_hochberg",
+            name: "Benjamini-Hochberg (FDR)",
+            aliases: ["BH procedure", "FDR correction", "False Discovery Rate"],
+            hypotheses: """
+                Controls the expected proportion of false discoveries:
+                $FDR = E[V/R] \\leq q$
+                # where V = false rejections, R = total rejections, q = target FDR level.
+                """,
+            testStatistic: """
+                Step-up procedure:
+                $1.\\; \\text{Sort p-values: } p_{(1)} \\leq p_{(2)} \\leq \\cdots \\leq p_{(m)}$
+                $2.\\; \\text{Find largest } k \\text{ such that } p_{(k)} \\leq \\frac{k}{m} \\times q$
+                3. Reject all H(i) for i <= k.
+                Adjusted p-values:
+                $p_{\\text{adj}(i)} = \\min_{j \\geq i} \\left\\{ \\frac{m}{j} \\times p_{(j)} \\right\\}$
+                """,
+            distribution: "Uses the original test's distribution.",
+            assumptions: [
+                "Independent or positively dependent tests (PRDS condition)",
+                "Controls FDR, not FWER \u{2014} allows some false positives"
+            ],
+            whenToUse: "Exploratory analyses, genomics, proteomics, or any setting with many tests where some false positives are tolerable. Much more powerful than FWER methods when m is large.",
+            whenNotToUse: "Confirmatory studies where any false positive is unacceptable. Use Bonferroni or Holm instead.",
+            notes: "FDR controls the expected *proportion* of false discoveries among rejected hypotheses, rather than the *probability* of any false discovery. This is a fundamentally less strict criterion than FWER, which is why it has more power. For 100 tests at FDR=0.05, you expect at most 5% of the rejected hypotheses to be false positives \u{2014} but you don't know which ones.",
+            references: [
+                "Benjamini, Y. & Hochberg, Y. (1995). Controlling the false discovery rate: a practical and powerful approach to multiple testing. JRSS-B, 57(1), 289\u{2013}300.",
+                "Storey, J.D. (2002). A direct approach to false discovery rates. JRSS-B, 64(3), 479\u{2013}498.",
+                "Motulsky, H.J. (2014). Intuitive Biostatistics, 4th ed. Oxford. Ch. 22."
+            ]
+        ),
+
+        StatsTestDetail(
+            id: "tukey_hsd",
+            name: "Tukey's Honestly Significant Difference",
+            aliases: ["Tukey HSD", "Tukey's test", "Tukey-Kramer"],
+            hypotheses: """
+                For all pairs (i, j):
+                $H_0: \\mu_i = \\mu_j$
+                $H_1: \\mu_i \\neq \\mu_j$
+                """,
+            testStatistic: """
+                $q = \\frac{\\bar{x}_1 - \\bar{x}_2}{\\sqrt{MSE / n}}$
+                # where MSE = mean square error from ANOVA,
+                # n = common sample size per group.
+                For unequal n (Tukey-Kramer):
+                $q = \\frac{\\bar{x}_1 - \\bar{x}_2}{\\sqrt{\\frac{MSE}{2} \\left(\\frac{1}{n_1} + \\frac{1}{n_2}\\right)}}$
+                """,
+            distribution: "Studentized range distribution q(k, df) where k = number of groups and df = error degrees of freedom from ANOVA.",
+            assumptions: [
+                "Data are normally distributed",
+                "Equal variances across groups (homoscedasticity)",
+                "Independent observations",
+                "Approximately equal sample sizes (exact for equal n)"
+            ],
+            whenToUse: "The standard posthoc test after a significant one-way ANOVA. Tests all k(k\u{2212}1)/2 pairwise comparisons simultaneously while controlling FWER.",
+            whenNotToUse: "When comparing only to a control (use Dunnett's). When variances are unequal (use Games-Howell). When data are non-normal (use Dunn's test after Kruskal-Wallis).",
+            notes: "Tukey's HSD is the most commonly used posthoc test in biomedical research. It is more powerful than Bonferroni-corrected t-tests because it uses the studentized range distribution, which accounts for the correlation structure of all pairwise differences. Prism uses this as its default posthoc test after ANOVA.",
+            references: [
+                "Tukey, J.W. (1953). The problem of multiple comparisons. Unpublished manuscript.",
+                "Kramer, C.Y. (1956). Extension of multiple range tests to group means with unequal numbers of replications. Biometrics, 12(3), 307\u{2013}310.",
+                "Motulsky, H.J. (2014). Intuitive Biostatistics, 4th ed. Oxford. Ch. 37."
+            ]
+        ),
+
+        StatsTestDetail(
+            id: "dunnett",
+            name: "Dunnett's Test",
+            aliases: ["Dunnett's multiple comparison with control"],
+            hypotheses: """
+                For each treatment group i vs control:
+                $H_0: \\mu_i = \\mu_{\\text{control}}$
+                $H_1: \\mu_i \\neq \\mu_{\\text{control}}$
+                """,
+            testStatistic: """
+                $t_i = \\frac{\\bar{x}_i - \\bar{x}_{\\text{control}}}{\\sqrt{MSE \\left(\\frac{1}{n_i} + \\frac{1}{n_{\\text{control}}}\\right)}}$
+                # where MSE = mean square error from ANOVA.
+                """,
+            distribution: "Multivariate t-distribution with special critical values tabulated by Dunnett, accounting for correlation between the k\u{2212}1 comparisons.",
+            assumptions: [
+                "Data are normally distributed",
+                "Equal variances across groups",
+                "Independent observations",
+                "A designated control group exists"
+            ],
+            whenToUse: "When comparing k\u{2212}1 treatment groups to a single control. More powerful than Tukey because it makes fewer comparisons.",
+            whenNotToUse: "When all pairwise comparisons are of interest (use Tukey). When there is no clear control group.",
+            notes: "Dunnett's test is more powerful than Tukey's HSD when only comparisons to a control are needed because it makes k\u{2212}1 comparisons instead of k(k\u{2212}1)/2. Refraction auto-detects a control group when specified in the config.",
+            references: [
+                "Dunnett, C.W. (1955). A multiple comparison procedure for comparing several treatments with a control. JASA, 50(272), 1096\u{2013}1121.",
+                "Motulsky, H.J. (2014). Intuitive Biostatistics, 4th ed. Oxford. Ch. 37."
+            ]
+        ),
+
+        StatsTestDetail(
+            id: "dunn",
+            name: "Dunn's Test",
+            aliases: ["Dunn's multiple comparison test", "Dunn-Bonferroni"],
+            hypotheses: """
+                For all pairs (i, j):
+                $H_0: \\text{Distributions of groups } i \\text{ and } j \\text{ are identical}$
+                $H_1: \\text{Distributions differ}$
+                """,
+            testStatistic: """
+                $z_{ij} = \\frac{\\bar{R}_i - \\bar{R}_j}{\\sqrt{\\frac{N(N+1)}{12} \\left(\\frac{1}{n_i} + \\frac{1}{n_j}\\right)}}$
+                # where R-bar_i = mean rank of group i,
+                # N = total observations.
+                """,
+            distribution: "Standard normal distribution (z-test). P-values are then adjusted for multiple comparisons (typically Bonferroni or Holm).",
+            assumptions: [
+                "Independent observations",
+                "Ordinal or continuous data",
+                "Significant Kruskal-Wallis test"
+            ],
+            whenToUse: "Nonparametric posthoc test after a significant Kruskal-Wallis. The standard choice when data violate normality.",
+            whenNotToUse: "When data are normally distributed (parametric posthoc tests like Tukey are more powerful).",
+            notes: "Dunn's test uses mean ranks rather than raw data, maintaining the nonparametric framework of the Kruskal-Wallis test. The p-values are typically adjusted using Bonferroni or Holm-Bonferroni correction. Refraction applies Holm-Bonferroni by default.",
+            references: [
+                "Dunn, O.J. (1964). Multiple comparisons using rank sums. Technometrics, 6(3), 241\u{2013}252.",
+                "Motulsky, H.J. (2014). Intuitive Biostatistics, 4th ed. Oxford. Ch. 37."
             ]
         ),
     ]

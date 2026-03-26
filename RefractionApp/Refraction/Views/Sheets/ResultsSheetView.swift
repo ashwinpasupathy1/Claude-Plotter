@@ -6,22 +6,22 @@ import SwiftUI
 struct ResultsSheetView: View {
 
     @Environment(AppState.self) private var appState
-    let sheet: Sheet
+    let analysis: Analysis
 
-    /// Parsed results from the sheet's rawJSON.
+    /// Parsed results from the analysis's rawJSON.
     @State private var parsed: ParsedResults?
 
     var body: some View {
         VStack(spacing: 0) {
             // Toolbar
             HStack {
-                Label(sheet.label, systemImage: "list.clipboard")
+                Label(analysis.label, systemImage: "list.clipboard")
                     .font(.headline)
                 Spacer()
-                if !sheet.rawJSON.isEmpty {
+                if !analysis.rawJSON.isEmpty {
                     Button("Copy JSON") {
                         NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(sheet.rawJSON, forType: .string)
+                        NSPasteboard.general.setString(analysis.rawJSON, forType: .string)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
@@ -82,19 +82,8 @@ struct ResultsSheetView: View {
                     .padding()
                 }
 
-                // Developer mode: raw JSON
-                if appState.developerMode, !sheet.rawJSON.isEmpty {
-                    Divider()
-                    ScrollView {
-                        Text(sheet.rawJSON)
-                            .font(.system(size: 10, design: .monospaced))
-                            .textSelection(.enabled)
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(height: 200)
-                }
-            } else if sheet.rawJSON.isEmpty {
+                // Raw JSON is now available in the Debug Console (toolbar terminal icon)
+            } else if analysis.rawJSON.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "list.clipboard")
                         .font(.system(size: 36))
@@ -111,8 +100,8 @@ struct ResultsSheetView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .task(id: sheet.rawJSON) {
-            parsed = ParsedResults.parse(json: sheet.rawJSON)
+        .task(id: analysis.rawJSON) {
+            parsed = ParsedResults.parse(json: analysis.rawJSON)
         }
     }
 

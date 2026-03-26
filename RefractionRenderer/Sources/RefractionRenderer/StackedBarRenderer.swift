@@ -81,4 +81,20 @@ public enum StackedBarRenderer {
             context.draw(label, at: CGPoint(x: x, y: plotRect.maxY + 14), anchor: .top)
         }
     }
+
+    public static func hitRegions(
+        plotRect: CGRect, spec: ChartSpec, style: StyleSpec
+    ) -> [ChartHitRegion] {
+        let groups = spec.groups
+        guard !groups.isEmpty else { return [] }
+        let groupWidth = plotRect.width / CGFloat(groups.count)
+        return groups.enumerated().map { i, group in
+            let x = plotRect.minX + groupWidth * CGFloat(i)
+            return ChartHitRegion(
+                kind: .bar, rect: CGRect(x: x, y: plotRect.minY, width: groupWidth, height: plotRect.height),
+                groupIndex: i, groupName: group.name, label: group.name,
+                metadata: ["n": "\(group.values.n)"]
+            )
+        }
+    }
 }

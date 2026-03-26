@@ -148,6 +148,23 @@ public enum ScatterRenderer {
         }
     }
 
+    // MARK: - Hit Regions
+
+    public static func hitRegions(
+        plotRect: CGRect, groups: [GroupData], style: StyleSpec
+    ) -> [ChartHitRegion] {
+        guard !groups.isEmpty else { return [] }
+        let groupWidth = plotRect.width / CGFloat(groups.count)
+        return groups.enumerated().map { i, group in
+            let x = plotRect.minX + groupWidth * CGFloat(i)
+            let rect = CGRect(x: x, y: plotRect.minY, width: groupWidth, height: plotRect.height)
+            return ChartHitRegion(
+                kind: .point, rect: rect, groupIndex: i, groupName: group.name,
+                label: group.name, metadata: ["n": "\(group.values.n)"]
+            )
+        }
+    }
+
     // MARK: - Helpers
 
     private static func formatNumber(_ v: Double) -> String {

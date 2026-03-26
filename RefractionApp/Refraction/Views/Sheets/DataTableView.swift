@@ -42,11 +42,6 @@ struct DataTableView: View {
             }
             .buttonStyle(.borderedProminent)
 
-            // Sample data button
-            Button("Try Sample Data") {
-                loadSampleData()
-            }
-            .buttonStyle(.bordered)
         }
         .padding(40)
     }
@@ -58,19 +53,17 @@ struct DataTableView: View {
             // Toolbar
             HStack {
                 Image(systemName: "tablecells")
-                Text(table.dataFilePath?.components(separatedBy: "/").last ?? "Data")
+                Text(table.originalFileName ?? table.label)
                     .font(.headline)
+                Text("(\(table.tableType.label))")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
                 if !dataShape.isEmpty && dataShape[0] > 0 {
                     Text("\(dataShape[0]) rows × \(dataShape[1]) cols")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("Change File...") {
-                    openFilePicker()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
@@ -226,16 +219,18 @@ struct DataTableView: View {
         panel.allowsMultipleSelection = false
 
         if panel.runModal() == .OK, let url = panel.url {
+            let table = appState.activeDataTable
             Task {
-                await appState.uploadFile(url: url)
+                await appState.uploadFile(url: url, for: table)
             }
         }
     }
 
     private func loadSampleData() {
         if let sampleURL = Bundle.main.url(forResource: "SampleData/drug_treatment", withExtension: "xlsx") {
+            let table = appState.activeDataTable
             Task {
-                await appState.uploadFile(url: sampleURL)
+                await appState.uploadFile(url: sampleURL, for: table)
             }
         }
     }

@@ -8,6 +8,7 @@ renderer can consume -- no Plotly, matplotlib, or UI dependencies.
 
 from __future__ import annotations
 
+import logging
 import numpy as np
 import pandas as pd
 from typing import Any
@@ -18,6 +19,8 @@ from refraction.core.chart_helpers import (
     _p_to_stars,
     PRISM_PALETTE,
 )
+
+_log = logging.getLogger(__name__)
 
 
 def analyze(
@@ -61,10 +64,15 @@ def analyze(
     """
     cfg = config or {}
 
+    _log.info("analyze() called: chart_type=%r, path=%r", chart_type, excel_path)
+    _log.debug("  config: %s", cfg)
+
     # ------------------------------------------------------------------
     # Dispatch to dedicated analyzers for chart types that have them
     # ------------------------------------------------------------------
     if chart_type in _DEDICATED_ANALYZERS:
+        analyzer_name = _DEDICATED_ANALYZERS[chart_type].__module__
+        _log.info("  dispatching to dedicated analyzer: %s", analyzer_name)
         try:
             kw = dict(cfg)
             kw["excel_path"] = excel_path
@@ -73,13 +81,18 @@ def analyze(
             result = spec.to_dict()
             result["ok"] = True
             result["chart_type"] = chart_type
+            result["_analyzer"] = analyzer_name
             # Ensure backward-compatible top-level 'groups' key
             if "groups" not in result and "data" in result:
                 data = result["data"]
                 if "groups" in data:
                     result["groups"] = data["groups"]
+            n_groups = len(result.get("groups", []))
+            n_comp = len(result.get("comparisons", []))
+            _log.info("  dedicated analyzer done: %d groups, %d comparisons", n_groups, n_comp)
             return result
         except Exception as exc:
+            _log.exception("  dedicated analyzer failed: %s", exc)
             return {"ok": False, "error": str(exc)}
 
     # ------------------------------------------------------------------
@@ -208,6 +221,9 @@ _DEDICATED_ANALYZERS = {
     "area_chart": _lazy_load_analyzer("xy", "analyze_xy"),
     "curve_fit": _lazy_load_analyzer("xy", "analyze_xy"),
     "bubble": _lazy_load_analyzer("xy", "analyze_xy"),
+    "box": _lazy_load_analyzer("box", "analyze_box"),
+    "violin": _lazy_load_analyzer("violin", "analyze_violin"),
+    "histogram": _lazy_load_analyzer("histogram", "analyze_histogram"),
 }
 
 

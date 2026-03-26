@@ -1,36 +1,48 @@
 // DataTabView.swift — Configuration panel for data, labels, and basic style.
-// Includes file picker, label fields, error type, and Generate button.
+// Includes data table picker, file picker, label fields, and error type.
 
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct DataTabView: View {
 
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        if let sheet = appState.activeSheet, sheet.kind == .graph,
-           let chartType = sheet.chartType,
-           let config = sheet.chartConfig {
-            @Bindable var config = config
+        if let graph = appState.activeGraph,
+           let experiment = appState.activeExperiment {
+            @Bindable var config = graph.chartConfig
+            let chartType = graph.chartType
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
 
-                    // MARK: - Data section
+                    // MARK: - Data Table picker
                     sectionHeader("Data")
 
                     VStack(alignment: .leading, spacing: 8) {
+                        LabeledContent("Data Table") {
+                            Picker("", selection: Bindable(graph).dataTableID) {
+                                ForEach(experiment.dataTables) { table in
+                                    Text(table.label).tag(table.id)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(maxWidth: .infinity)
+                            .onChange(of: graph.dataTableID) { _, newID in
+                                // Sync the excel path when the user picks a different data table
+                                if let table = experiment.dataTables.first(where: { $0.id == newID }) {
+                                    config.excelPath = table.dataFilePath ?? ""
+                                }
+                            }
+                        }
+
                         HStack {
-                            Text(fileDisplayName(for: config))
+                            let table = appState.activeExperiment?.dataTable(for: graph)
+                            let displayName = table?.originalFileName ?? fileDisplayName(for: config)
+                            Text(displayName)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .foregroundStyle(config.excelPath.isEmpty ? .secondary : .primary)
-
-                            Button("Choose File...") {
-                                openFilePicker()
-                            }
-                            .controlSize(.small)
                         }
 
                         LabeledContent("Sheet") {
@@ -109,7 +121,7 @@ struct DataTabView: View {
 
                     Divider()
 
-                    // MARK: - Generate
+                    // MARK: - Generate (temporary — will be removed with two-tier reactivity)
                     Button {
                         Task { await appState.generatePlot() }
                     } label: {
@@ -128,7 +140,7 @@ struct DataTabView: View {
                 .padding()
             }
         } else {
-            Text("Select a graph sheet")
+            Text("Select a graph")
                 .foregroundStyle(.secondary)
         }
     }
@@ -148,22 +160,4 @@ struct DataTabView: View {
             .foregroundStyle(.primary)
     }
 
-    private func openFilePicker() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [
-            UTType(filenameExtension: "xlsx")!,
-            UTType(filenameExtension: "xls")!,
-            UTType(filenameExtension: "csv")!,
-        ]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.message = "Select an Excel or CSV data file"
-
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-
-        // Upload to the server so the Python engine can access it
-        Task {
-            await appState.uploadFile(url: url)
-        }
-    }
 }

@@ -48,4 +48,19 @@ public enum DotPlotRenderer {
             }
         }
     }
+
+    public static func hitRegions(
+        plotRect: CGRect, groups: [GroupData], style: StyleSpec
+    ) -> [ChartHitRegion] {
+        guard !groups.isEmpty else { return [] }
+        let groupWidth = plotRect.width / CGFloat(groups.count)
+        return groups.enumerated().map { i, group in
+            let x = plotRect.minX + groupWidth * CGFloat(i)
+            return ChartHitRegion(
+                kind: .point, rect: CGRect(x: x, y: plotRect.minY, width: groupWidth, height: plotRect.height),
+                groupIndex: i, groupName: group.name, label: group.name,
+                metadata: ["n": "\(group.values.n)"]
+            )
+        }
+    }
 }

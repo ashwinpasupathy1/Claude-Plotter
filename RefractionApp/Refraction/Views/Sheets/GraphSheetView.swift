@@ -1,16 +1,19 @@
-// GraphSheetView.swift — Wraps ChartCanvasView with a minimal toolbar for graph sheets.
-// Auto-generates the chart when the sheet appears or data changes.
+// GraphSheetView.swift — Graph view with chart canvas + config panel sidebar.
+// Auto-generates the chart when the graph appears or data changes.
 // Double-click the chart to open the Format Graph dialog.
 
 import SwiftUI
+import RefractionRenderer
 
 struct GraphSheetView: View {
 
     @Environment(AppState.self) private var appState
-    let sheet: Sheet
+    let graph: Graph
 
     @State private var showFormatDialog = false
     @State private var showFormatAxesDialog = false
+    @State private var showConfigPanel = true
+    @State private var configPanelWidth: CGFloat = 260
 
     var body: some View {
         VStack(spacing: 0) {
@@ -18,87 +21,192 @@ struct GraphSheetView: View {
             graphToolbar
             Divider()
 
-            // Chart canvas
-            if sheet.isLoading {
-                ProgressView("Generating chart...")
-                    .controlSize(.large)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let spec = sheet.chartSpec {
-                ChartCanvasView(spec: spec)
-                    .onTapGesture(count: 2) {
-                        showFormatDialog = true
-                    }
-                    .contextMenu {
-                        Button("Format Graph...") {
-                            showFormatDialog = true
-                        }
-                        Button("Format Axes...") {
-                            showFormatAxesDialog = true
-                        }
-                    }
-            } else if appState.activeDataTable?.hasData == true {
-                ProgressView("Generating chart...")
-                    .controlSize(.regular)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                Text("Import data into the data table first")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-
-            // Developer mode: raw JSON panel
-            if appState.developerMode, !sheet.rawJSON.isEmpty {
-                Divider()
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        Label("Engine Response", systemImage: "curlybraces")
-                            .font(.headline)
-                        Spacer()
-                        Button("Copy") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(sheet.rawJSON, forType: .string)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(.bar)
-
-                    ScrollView {
-                        Text(sheet.rawJSON)
-                            .font(.system(size: 11, design: .monospaced))
-                            .textSelection(.enabled)
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+            // Main content: chart canvas + optional config panel
+            HStack(spacing: 0) {
+                // Chart canvas + zoom strip
+                VStack(spacing: 0) {
+                    chartArea
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    Divider()
+                    zoomControlStrip
                 }
-                .frame(height: 250)
+
+                if showConfigPanel {
+                    // Draggable divider
+                    Rectangle()
+                        .fill(Color(nsColor: .separatorColor))
+                        .frame(width: 1)
+                        .onHover { hovering in
+                            if hovering {
+                                NSCursor.resizeLeftRight.push()
+                            } else {
+                                NSCursor.pop()
+                            }
+                        }
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    let newWidth = configPanelWidth - value.translation.width
+                                    configPanelWidth = min(max(newWidth, 200), 400)
+                                }
+                        )
+
+                    // Config panel
+                    ConfigTabView()
+                        .frame(width: configPanelWidth)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                }
             }
         }
-        // Auto-generate when sheet appears or data path changes
-        .task(id: appState.activeDataTable?.dataFilePath) {
-            if appState.activeDataTable?.hasData == true, sheet.chartSpec == nil {
-                await appState.generatePlot()
-            }
+        // Auto-generate only when this graph has no spec and data is available.
+        .task(id: "\(graph.id)_\(appState.activeGraphDataTable?.dataFilePath ?? "")") {
+            guard graph.chartSpec == nil,
+                  appState.activeGraphDataTable?.hasData == true else { return }
+            await appState.generatePlot()
         }
         .sheet(isPresented: $showFormatDialog) {
-            FormatGraphDialog(settings: sheet.formatSettings)
+            FormatGraphDialog(settings: graph.formatSettings)
         }
         .sheet(isPresented: $showFormatAxesDialog) {
-            FormatAxesDialog(settings: sheet.formatAxesSettings)
+            FormatAxesDialog(settings: graph.formatAxesSettings)
         }
+    }
+
+    // MARK: - Chart Area
+
+    /// Merge format dialog settings into the engine-provided ChartSpec
+    /// so the renderers respect user overrides from Format Graph / Format Axes.
+    private var mergedSpec: ChartSpec? {
+        guard let baseSpec = graph.chartSpec else { return nil }
+        return applyFormatSettings(
+            spec: baseSpec,
+            graphSettings: graph.formatSettings,
+            axesSettings: graph.formatAxesSettings
+        )
+    }
+
+    @ViewBuilder
+    private var chartArea: some View {
+        if graph.isLoading {
+            ProgressView("Generating chart...")
+                .controlSize(.large)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let spec = mergedSpec {
+            GeometryReader { geo in
+                let zoom = graph.zoomLevel
+                let scaledWidth = geo.size.width * zoom
+                let scaledHeight = geo.size.height * zoom
+                let needsScroll = zoom > 1.0
+
+                Group {
+                    if needsScroll {
+                        ScrollView([.horizontal, .vertical]) {
+                            chartCanvas(spec: spec)
+                                .frame(width: scaledWidth, height: scaledHeight)
+                        }
+                    } else {
+                        chartCanvas(spec: spec)
+                            .frame(width: geo.size.width, height: geo.size.height)
+                    }
+                }
+            }
+        } else if appState.activeGraphDataTable?.hasData == true {
+            ProgressView("Generating chart...")
+                .controlSize(.regular)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            Text("Import data into the data table first")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private func chartCanvas(spec: ChartSpec) -> some View {
+        ChartCanvasView(spec: spec)
+            .contextMenu {
+                Button("Format Graph...") {
+                    showFormatDialog = true
+                }
+                Button("Format Axes...") {
+                    showFormatAxesDialog = true
+                }
+            }
+    }
+
+    // MARK: - Zoom Control Strip
+
+    private var zoomControlStrip: some View {
+        HStack(spacing: 8) {
+            Button("Fit") {
+                graph.zoomLevel = 1.0
+            }
+            .controlSize(.small)
+            .buttonStyle(.bordered)
+
+            Divider()
+                .frame(height: 16)
+
+            Button {
+                graph.zoomLevel = max(0.25, graph.zoomLevel - 0.25)
+            } label: {
+                Image(systemName: "minus")
+            }
+            .controlSize(.small)
+            .buttonStyle(.borderless)
+            .disabled(graph.zoomLevel <= 0.25)
+
+            Slider(
+                value: Bindable(graph).zoomLevel,
+                in: 0.25...4.0,
+                step: 0.25
+            )
+            .frame(width: 120)
+            .controlSize(.small)
+
+            Button {
+                graph.zoomLevel = min(4.0, graph.zoomLevel + 0.25)
+            } label: {
+                Image(systemName: "plus")
+            }
+            .controlSize(.small)
+            .buttonStyle(.borderless)
+            .disabled(graph.zoomLevel >= 4.0)
+
+            Text("\(Int(graph.zoomLevel * 100))%")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .frame(width: 40, alignment: .trailing)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 28)
+        .background(.bar)
     }
 
     // MARK: - Toolbar
 
     private var graphToolbar: some View {
         HStack {
-            if let chartType = sheet.chartType {
-                Label(chartType.label, systemImage: chartType.sfSymbol)
-                    .font(.headline)
+            Label(graph.chartType.label, systemImage: graph.chartType.sfSymbol)
+                .font(.headline)
+            if let tableName = appState.activeExperiment?.dataTable(for: graph)?.label {
+                Text("→ \(tableName)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
             Spacer()
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    showConfigPanel.toggle()
+                }
+            } label: {
+                Image(systemName: showConfigPanel ? "sidebar.trailing" : "sidebar.right")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help(showConfigPanel ? "Hide Config Panel" : "Show Config Panel")
+
             Button {
                 showFormatDialog = true
             } label: {
@@ -106,6 +214,7 @@ struct GraphSheetView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+
             Button {
                 showFormatAxesDialog = true
             } label: {

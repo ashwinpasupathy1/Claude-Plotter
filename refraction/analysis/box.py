@@ -52,15 +52,33 @@ def analyze_box(kw: dict) -> ChartSpec:
     colors = resolve_colors(cfg["color"], len(groups))
 
     stats_list = []
-    for g in groups:
+    group_data = []
+    for i, g in enumerate(groups):
         vals = values[g]
         if vals:
-            stats_list.append(_box_stats(vals))
+            box = _box_stats(vals)
+            stats_list.append(box)
+            m = float(np.mean(vals))
+            med = float(np.median(vals))
+            sd = float(np.std(vals, ddof=1)) if len(vals) > 1 else 0.0
         else:
             stats_list.append({
                 "q1": 0.0, "median": 0.0, "q3": 0.0,
                 "whisker_lo": 0.0, "whisker_hi": 0.0, "outliers": [],
             })
+            m = 0.0
+            med = 0.0
+            sd = 0.0
+        group_data.append({
+            "name": g,
+            "values": vals,
+            "mean": m,
+            "median": med,
+            "sd": sd,
+            "sem": sd / len(vals) ** 0.5 if vals else 0.0,
+            "n": len(vals),
+            "color": colors[i],
+        })
 
     # Optional raw points
     raw_points = None
@@ -94,7 +112,7 @@ def analyze_box(kw: dict) -> ChartSpec:
             gridlines=cfg["gridlines"],
         ),
         data={
-            "groups": groups,
+            "groups": group_data,
             "box_stats": stats_list,
             "raw_points": raw_points,
             "results": results,

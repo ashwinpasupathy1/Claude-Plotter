@@ -19,6 +19,10 @@ class AxisSpec:
     scale: str = "linear"          # "linear" | "log"
     limits: tuple | None = None    # (min, max) or None for auto
     tick_interval: float = 0.0     # 0 = auto
+    ticks: list[float] = field(default_factory=list)       # precomputed tick positions
+    tick_labels: list[str] = field(default_factory=list)    # formatted tick labels
+    range_min: float = 0.0         # computed axis min (with padding)
+    range_max: float = 10.0        # computed axis max (with padding)
 
 
 @dataclass

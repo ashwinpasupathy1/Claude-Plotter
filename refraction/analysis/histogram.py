@@ -34,7 +34,8 @@ def analyze_histogram(kw: dict) -> ChartSpec:
     colors = resolve_colors(cfg["color"], len(groups))
 
     histograms = []
-    for g in groups:
+    group_data = []
+    for i, g in enumerate(groups):
         vals = values[g]
         if vals:
             counts, bin_edges = np.histogram(vals, bins=n_bins)
@@ -42,8 +43,24 @@ def analyze_histogram(kw: dict) -> ChartSpec:
                 "bin_edges": bin_edges.tolist(),
                 "counts": counts.tolist(),
             })
+            m = float(np.mean(vals))
+            med = float(np.median(vals))
+            sd = float(np.std(vals, ddof=1)) if len(vals) > 1 else 0.0
         else:
             histograms.append({"bin_edges": [], "counts": []})
+            m = 0.0
+            med = 0.0
+            sd = 0.0
+        group_data.append({
+            "name": g,
+            "values": vals,
+            "mean": m,
+            "median": med,
+            "sd": sd,
+            "sem": sd / len(vals) ** 0.5 if vals else 0.0,
+            "n": len(vals),
+            "color": colors[i],
+        })
 
     # Results section
     results = build_results_section(values)
@@ -65,7 +82,7 @@ def analyze_histogram(kw: dict) -> ChartSpec:
             gridlines=cfg["gridlines"],
         ),
         data={
-            "groups": groups,
+            "groups": group_data,
             "histograms": histograms,
             "hist_mode": hist_mode,
             "results": results,

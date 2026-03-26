@@ -21,14 +21,23 @@ struct ChartCanvasView: View {
                     height: size.height - plotInsets.top - plotInsets.bottom
                 )
 
-                // 1. Draw axes (spines, ticks, labels)
+                // Use engine-provided Y range, fall back to data-computed
+                let yRange: (min: Double, max: Double)
+                if let r = spec.axes.yRange, r.count == 2 {
+                    yRange = (min: r[0], max: r[1])
+                } else {
+                    yRange = computeYRange(groups: spec.groups)
+                }
+
+                // 1. Draw axes (spines, ticks, labels) with engine-provided ticks
                 AxisRenderer.draw(
                     in: context,
                     plotRect: plotRect,
                     canvasSize: size,
                     spec: spec.axes,
                     style: spec.style,
-                    groups: spec.groups.map(\.name)
+                    groups: spec.groups.map(\.name),
+                    yRange: yRange
                 )
 
                 // 2. Dispatch to the appropriate chart renderer
@@ -64,6 +73,7 @@ struct ChartCanvasView: View {
                     BoxRenderer.draw(
                         in: context,
                         plotRect: plotRect,
+                        spec: spec,
                         groups: spec.groups,
                         style: spec.style
                     )
@@ -72,6 +82,7 @@ struct ChartCanvasView: View {
                     ViolinRenderer.draw(
                         in: context,
                         plotRect: plotRect,
+                        spec: spec,
                         groups: spec.groups,
                         style: spec.style
                     )
@@ -98,6 +109,7 @@ struct ChartCanvasView: View {
                     HistogramRenderer.draw(
                         in: context,
                         plotRect: plotRect,
+                        spec: spec,
                         groups: spec.groups,
                         style: spec.style
                     )
@@ -120,10 +132,18 @@ struct ChartCanvasView: View {
 
                 // ── Not yet implemented — show placeholder ──────
 
+                case "kaplan_meier":
+                    KaplanMeierRenderer.draw(
+                        in: context,
+                        plotRect: plotRect,
+                        spec: spec,
+                        style: spec.style
+                    )
+
                 case "area_chart", "curve_fit", "bubble",
                      "lollipop", "ecdf", "qq_plot",
                      "raincloud",
-                     "kaplan_meier", "forest_plot",
+                     "forest_plot",
                      "bland_altman", "contingency", "chi_square_gof",
                      "heatmap", "two_way_anova",
                      "repeated_measures":
@@ -158,11 +178,18 @@ struct ChartCanvasView: View {
                     drawReferenceLine(in: context, plotRect: plotRect, refLine: refLine, spec: spec)
                 }
             }
-            .background(Color.white)
+            .background(pageBackgroundColor)
             .clipShape(RoundedRectangle(cornerRadius: 4))
             .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
             .padding()
         }
+    }
+
+    /// Page background color from axes settings, defaulting to white.
+    private var pageBackgroundColor: Color {
+        let bg = spec.axes.pageBackground
+        if bg == "clear" || bg.isEmpty { return .white }
+        return Color(hex: bg)
     }
 
     // MARK: - Fallback

@@ -40,10 +40,12 @@ actor APIClient {
     }
 
     /// Send a render request and return both the decoded ChartSpec and pretty-printed raw JSON.
-    func analyzeWithRawJSON(chartType: ChartType, config: ChartConfig) async throws -> (ChartSpec, String) {
+    func analyzeWithRawJSON(chartType: ChartType, config: ChartConfig, debug: Bool = false) async throws -> (ChartSpec, String) {
+        var kw = config.toDict()
+        if debug { kw["_debug"] = true }
         let body: [String: Any] = [
             "chart_type": chartType.key,
-            "kw": config.toDict()
+            "kw": kw
         ]
 
         let data = try await post(path: "/render", body: body)
@@ -126,6 +128,63 @@ actor APIClient {
         return path
     }
 
+    /// List sheet names in an Excel file (CSV returns ["Sheet1"]).
+    func listSheets(excelPath: String) async throws -> [String] {
+        let body: [String: Any] = ["excel_path": excelPath]
+        let data = try await post(path: "/sheet-list", body: body)
+
+        struct SheetListResponse: Decodable {
+            let ok: Bool
+            let sheets: [String]?
+            let error: String?
+        }
+
+        let resp = try JSONDecoder().decode(SheetListResponse.self, from: data)
+        guard resp.ok, let sheets = resp.sheets else {
+            throw APIError.serverError(resp.error ?? "Failed to list sheets")
+        }
+        return sheets
+    }
+
+    /// Validate data against a table type. Returns (valid, errors, warnings).
+    /// sheet can be an index (Int) or a name (String).
+    func validateTable(excelPath: String, tableType: String, sheetIndex: Int = 0, sheetName: String? = nil) async throws -> ValidationResponse {
+        var body: [String: Any] = [
+            "excel_path": excelPath,
+            "table_type": tableType,
+        ]
+        if let name = sheetName {
+            body["sheet"] = name
+        } else {
+            body["sheet"] = sheetIndex
+        }
+        let data = try await post(path: "/validate-table", body: body)
+        return try JSONDecoder().decode(ValidationResponse.self, from: data)
+    }
+
+    /// Render a LaTeX formula to PNG. Returns base64-encoded PNG data.
+    func renderLatex(latex: String, dpi: Int = 150, fontsize: Int = 14) async throws -> Data {
+        let body: [String: Any] = [
+            "latex": latex,
+            "dpi": dpi,
+            "fontsize": fontsize,
+        ]
+        let data = try await post(path: "/render-latex", body: body)
+
+        struct LatexResponse: Decodable {
+            let ok: Bool
+            let png_base64: String?
+            let error: String?
+        }
+
+        let resp = try JSONDecoder().decode(LatexResponse.self, from: data)
+        guard resp.ok, let b64 = resp.png_base64,
+              let pngData = Data(base64Encoded: b64) else {
+            throw APIError.serverError(resp.error ?? "LaTeX render failed")
+        }
+        return pngData
+    }
+
     /// Fetch a read-only preview of the data in an Excel/CSV file.
     func dataPreview(excelPath: String, sheet: Int = 0) async throws -> DataPreviewResponse {
         let body: [String: Any] = [
@@ -197,6 +256,48 @@ actor APIClient {
         return path
     }
 
+    /// Upload a .refract file and return the parsed project dict.
+    func loadProject(fileURL: URL) async throws -> [String: Any] {
+        let url = URL(string: "\(baseURL)/project/load")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+
+        let boundary = UUID().uuidString
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        let fileData = try Data(contentsOf: fileURL)
+        let filename = fileURL.lastPathComponent
+
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
+        body.append(fileData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+
+        request.httpBody = body
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let http = response as? HTTPURLResponse,
+              http.statusCode == 200 else {
+            if let errorObj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let errorMsg = errorObj["error"] as? String {
+                throw APIError.serverError(errorMsg)
+            }
+            throw APIError.httpError(statusCode: (response as? HTTPURLResponse)?.statusCode ?? 0)
+        }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let ok = json["ok"] as? Bool, ok,
+              let project = json["project"] as? [String: Any] else {
+            let errorMsg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+            throw APIError.serverError(errorMsg ?? "Failed to load project")
+        }
+
+        return project
+    }
+
     // MARK: - Private helpers
 
     private func post(path: String, body: [String: Any]) async throws -> Data {
@@ -208,16 +309,51 @@ actor APIClient {
         let jsonData = try JSONSerialization.data(withJSONObject: body)
         request.httpBody = jsonData
 
-        let (data, response) = try await session.data(for: request)
+        // Log request
+        let requestBody = String(data: jsonData, encoding: .utf8) ?? "{}"
+        let start = Date()
+        await DebugLog.shared.logRequest(method: "POST", path: path, body: requestBody)
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            await DebugLog.shared.logError(method: "POST", path: path, error: error.localizedDescription)
+            throw error
+        }
+
+        let durationMs = Int(Date().timeIntervalSince(start) * 1000)
+        let responseBody = String(data: data, encoding: .utf8) ?? ""
 
         guard let http = response as? HTTPURLResponse else {
+            await DebugLog.shared.logError(method: "POST", path: path, error: "Invalid response")
             throw APIError.invalidResponse
         }
 
+        // Log response
+        let prettyResponse: String
+        if let jsonObj = try? JSONSerialization.jsonObject(with: data),
+           let prettyData = try? JSONSerialization.data(withJSONObject: jsonObj, options: .prettyPrinted) {
+            prettyResponse = String(data: prettyData, encoding: .utf8) ?? responseBody
+        } else {
+            prettyResponse = responseBody
+        }
+        await DebugLog.shared.logResponse(method: "POST", path: path, statusCode: http.statusCode, body: prettyResponse, durationMs: durationMs)
+
+        // Extract engine trace if present in the response
+        if let jsonObj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let trace = jsonObj["_trace"] as? [String], !trace.isEmpty {
+            await DebugLog.shared.logEngineTrace(trace, forPath: path)
+        }
+
         guard http.statusCode == 200 else {
-            // Try to extract error message from response body
-            if let errorObj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let errorMsg = errorObj["error"] as? String {
+            if let errorObj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                let errorMsg = errorObj["error"] as? String ?? "Unknown error"
+                // Log full Python traceback if present
+                if let tb = errorObj["traceback"] as? String, !tb.isEmpty {
+                    await DebugLog.shared.logTraceback(method: "POST", path: path, traceback: tb)
+                }
                 throw APIError.serverError(errorMsg)
             }
             throw APIError.httpError(statusCode: http.statusCode)
@@ -244,6 +380,17 @@ enum APIError: LocalizedError {
             return "Invalid response from server"
         }
     }
+}
+
+// MARK: - Validation Response
+
+struct ValidationResponse: Decodable {
+    let ok: Bool
+    let valid: Bool?
+    let errors: [String]?
+    let warnings: [String]?
+    let shape: [Int]?
+    let error: String?
 }
 
 // MARK: - Data Preview Response

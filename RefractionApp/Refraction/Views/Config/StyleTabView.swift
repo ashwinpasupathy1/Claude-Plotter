@@ -8,12 +8,34 @@ struct StyleTabView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        if let sheet = appState.activeSheet, sheet.kind == .graph,
-           let chartType = sheet.chartType,
-           let config = sheet.chartConfig {
-            @Bindable var config = config
+        if let graph = appState.activeGraph {
+            let chartType = graph.chartType
+            @Bindable var config = graph.chartConfig
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+
+                    // MARK: - Render Style
+                    sectionHeader("Render Style")
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Picker("", selection: Binding(
+                            get: { graph.renderStyle },
+                            set: { newStyle in
+                                graph.applyRenderStyle(newStyle)
+                            }
+                        )) {
+                            ForEach(RenderStyle.allCases) { style in
+                                Text(style.label).tag(style)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        Text(graph.renderStyle.description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Divider()
 
                     // MARK: - Error bars
                     if chartType.hasErrorBars {
@@ -101,7 +123,7 @@ struct StyleTabView: View {
                 .padding()
             }
         } else {
-            Text("Select a graph sheet")
+            Text("Select a graph")
                 .foregroundStyle(.secondary)
         }
     }

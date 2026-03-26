@@ -1,5 +1,5 @@
 // ContentView.swift — Root view with permanent sidebar + toolbar banner.
-// Uses GeometryReader + HStack for stable layout (no HSplitView).
+// Debug console panel embedded at bottom when developer mode is on.
 
 import SwiftUI
 
@@ -9,41 +9,70 @@ struct ContentView: View {
     @Environment(PythonServer.self) private var server
 
     @State private var sidebarWidth: CGFloat = 240
+    @State private var consoleHeight: CGFloat = 220
 
     var body: some View {
         VStack(spacing: 0) {
             // Prism-style toolbar banner
             ToolbarBanner()
 
-            // Main content: fixed sidebar + detail
-            HStack(spacing: 0) {
-                // Left: permanent navigator sidebar
-                NavigatorView()
-                    .frame(width: sidebarWidth)
-                    .background(Color(nsColor: .controlBackgroundColor))
+            // Main area + optional debug console
+            VStack(spacing: 0) {
+                // Main content: fixed sidebar + detail
+                HStack(spacing: 0) {
+                    // Left: permanent navigator sidebar
+                    NavigatorView()
+                        .frame(width: sidebarWidth)
+                        .background(Color(nsColor: .controlBackgroundColor))
 
-                // Draggable divider
-                Rectangle()
-                    .fill(Color(nsColor: .separatorColor))
-                    .frame(width: 1)
-                    .onHover { hovering in
-                        if hovering {
-                            NSCursor.resizeLeftRight.push()
-                        } else {
-                            NSCursor.pop()
-                        }
-                    }
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                let newWidth = sidebarWidth + value.translation.width
-                                sidebarWidth = min(max(newWidth, 180), 400)
+                    // Draggable divider
+                    Rectangle()
+                        .fill(Color(nsColor: .separatorColor))
+                        .frame(width: 1)
+                        .onHover { hovering in
+                            if hovering {
+                                NSCursor.resizeLeftRight.push()
+                            } else {
+                                NSCursor.pop()
                             }
-                    )
+                        }
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    let newWidth = sidebarWidth + value.translation.width
+                                    sidebarWidth = min(max(newWidth, 180), 400)
+                                }
+                        )
 
-                // Right: active sheet content
-                contentArea
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Right: active item content
+                    contentArea
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+
+                // Debug console panel (embedded at bottom)
+                if appState.developerMode {
+                    // Draggable console divider
+                    Rectangle()
+                        .fill(Color(nsColor: .separatorColor))
+                        .frame(height: 1)
+                        .onHover { hovering in
+                            if hovering {
+                                NSCursor.resizeUpDown.push()
+                            } else {
+                                NSCursor.pop()
+                            }
+                        }
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    let newHeight = consoleHeight - value.translation.height
+                                    consoleHeight = min(max(newHeight, 100), 500)
+                                }
+                        )
+
+                    DebugConsolePanel()
+                        .frame(height: consoleHeight)
+                }
             }
         }
         .onChange(of: appState.projectDisplayName) { _, newTitle in
@@ -57,18 +86,23 @@ struct ContentView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
-                    appState.developerMode.toggle()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        appState.developerMode.toggle()
+                    }
                 } label: {
-                    Image(systemName: appState.developerMode ? "curlybraces.square.fill" : "curlybraces.square")
+                    Image(systemName: appState.developerMode ? "terminal.fill" : "terminal")
+                        .foregroundStyle(appState.developerMode ? .green : .secondary)
                 }
-                .help("Toggle Developer Mode (raw JSON)")
+                .help(appState.developerMode ? "Hide Debug Console" : "Show Debug Console")
 
-                serverStatusIndicator
+                if appState.developerMode {
+                    serverStatusIndicator
+                }
             }
         }
     }
 
-    // MARK: - Content area: dispatch by sheet kind
+    // MARK: - Content area: dispatch by item kind
 
     @ViewBuilder
     private var contentArea: some View {
@@ -82,28 +116,32 @@ struct ContentView: View {
                     appState.dismissError()
                 }
             )
-        } else if let sheet = appState.activeSheet {
-            switch sheet.kind {
+        } else if let kind = appState.activeItemKind {
+            switch kind {
             case .dataTable:
                 DataTableView()
             case .graph:
-                GraphSheetView(sheet: sheet)
-            case .results:
-                ResultsSheetView(sheet: sheet)
-            case .info:
-                InfoSheetView(sheet: sheet)
+                if let graph = appState.activeGraph {
+                    GraphSheetView(graph: graph)
+                } else {
+                    emptyCanvas
+                }
+            case .analysis:
+                if let analysis = appState.activeAnalysis {
+                    ResultsSheetView(analysis: analysis)
+                } else {
+                    emptyCanvas
+                }
             }
-        } else if !appState.hasDataTables {
-            WelcomeView()
         } else {
-            VStack(spacing: 16) {
-                Image(systemName: "sidebar.left")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.quaternary)
-                Text("Select a sheet from the navigator")
-                    .foregroundStyle(.secondary)
-            }
+            emptyCanvas
         }
+    }
+
+    /// Blank canvas — shown when nothing is selected.
+    private var emptyCanvas: some View {
+        Color(nsColor: .windowBackgroundColor)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Server status

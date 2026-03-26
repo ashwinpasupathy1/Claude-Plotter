@@ -51,13 +51,20 @@ struct AnalyzeDataDialog: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var selectedAnalysis: String?
+    @State private var selectedTableID: UUID?
+    @State private var analysisName: String = ""
     @State private var recommendation: RecommendTestResponse?
     @State private var isLoadingRecommendation = false
     @State private var isRunning = false
     @State private var errorMessage: String?
     @State private var showStatsWiki = false
 
-    private var table: DataTable? { appState.activeDataTable }
+    private var tablesWithData: [DataTable] {
+        appState.activeExperiment?.dataTables.filter { $0.hasData } ?? []
+    }
+    private var table: DataTable? {
+        tablesWithData.first { $0.id == selectedTableID } ?? tablesWithData.first
+    }
     private var tableType: TableType? { table?.tableType }
 
     /// All analyses in display order.
@@ -84,6 +91,34 @@ struct AnalyzeDataDialog: View {
 
             Divider()
 
+            // Data table picker
+            if tablesWithData.count > 1 {
+                HStack {
+                    Text("Data Table:")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Picker("", selection: Binding(
+                        get: { selectedTableID ?? tablesWithData.first?.id ?? UUID() },
+                        set: { newID in
+                            selectedTableID = newID
+                            selectedAnalysis = nil
+                            recommendation = nil
+                            Task { await loadRecommendation() }
+                        }
+                    )) {
+                        ForEach(tablesWithData) { t in
+                            Text("\(t.label) (\(t.tableType.label))").tag(t.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: 250)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+
+                Divider()
+            }
+
             // Main content: two-panel layout
             HStack(spacing: 0) {
                 // Left panel: analysis list
@@ -97,6 +132,19 @@ struct AnalyzeDataDialog: View {
                     .frame(minWidth: 300)
             }
             .frame(height: 400)
+
+            Divider()
+
+            // Name field
+            HStack {
+                Text("Name")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                TextField(selectedAnalysisLabel, text: $analysisName)
+                    .textFieldStyle(.roundedBorder)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
 
             Divider()
 
@@ -128,7 +176,10 @@ struct AnalyzeDataDialog: View {
             }
             .padding(16)
         }
-        .frame(width: 640, height: 500)
+        .frame(width: 640, height: 580)
+        .onAppear {
+            selectedTableID = tablesWithData.first?.id
+        }
         .task {
             await loadRecommendation()
         }
@@ -329,12 +380,30 @@ struct AnalyzeDataDialog: View {
         isLoadingRecommendation = false
     }
 
+    private var selectedAnalysisLabel: String {
+        guard let sel = selectedAnalysis else { return "Results" }
+        return allAnalyses.first(where: { $0.id == sel })?.label ?? sel
+    }
+
+    private var effectiveAnalysisName: String {
+        let trimmed = analysisName.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? selectedAnalysisLabel : trimmed
+    }
+
     private func runAnalysis() {
         guard let analysisType = selectedAnalysis else { return }
+
+        // Check for duplicate name
+        if let experiment = appState.activeExperiment,
+           experiment.analyses.contains(where: { $0.label == effectiveAnalysisName }) {
+            errorMessage = "An analysis named \"\(effectiveAnalysisName)\" already exists."
+            return
+        }
+
         isRunning = true
         errorMessage = nil
         Task { @MainActor in
-            await appState.runAnalysis(analysisType: analysisType)
+            await appState.runAnalysis(analysisType: analysisType, dataTableID: table?.id, label: effectiveAnalysisName)
             isRunning = false
             dismiss()
         }

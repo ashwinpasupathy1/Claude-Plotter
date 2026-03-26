@@ -80,6 +80,74 @@ public func computeYRange(
     return (min: Swift.min(allMin, 0), max: allMax + padding)
 }
 
+// MARK: - Pretty tick marks (R-style)
+
+/// Compute "nice" tick positions for an axis range, similar to R's pretty() or
+/// matplotlib's MaxNLocator. Prefers round numbers (multiples of 1, 2, 5 × 10^n).
+///
+/// - Parameters:
+///   - lo: Data minimum
+///   - hi: Data maximum
+///   - targetCount: Desired number of ticks (default 5–7)
+/// - Returns: Sorted array of tick values that cover [lo, hi] with nice spacing.
+public func prettyTicks(lo: Double, hi: Double, targetCount: Int = 6) -> [Double] {
+    guard hi > lo else { return [lo] }
+
+    let rawStep = (hi - lo) / Double(max(targetCount - 1, 1))
+
+    // Find the order of magnitude
+    let magnitude = pow(10.0, floor(log10(rawStep)))
+
+    // Candidate nice steps: 1, 2, 2.5, 5, 10 × magnitude
+    let candidates: [Double] = [1, 2, 2.5, 5, 10].map { $0 * magnitude }
+
+    // Pick the candidate that gives closest to targetCount ticks
+    var bestStep = candidates[0]
+    var bestDiff = Int.max
+    for step in candidates {
+        let nTicks = Int(floor(hi / step) - ceil(lo / step)) + 1
+        let diff = abs(nTicks - targetCount)
+        if diff < bestDiff || (diff == bestDiff && step > bestStep) {
+            bestDiff = diff
+            bestStep = step
+        }
+    }
+
+    // Generate ticks: start at the first multiple of step >= lo, end at last <= hi
+    let first = ceil(lo / bestStep) * bestStep
+    let last = floor(hi / bestStep) * bestStep
+
+    var ticks: [Double] = []
+    var v = first
+    while v <= last + bestStep * 0.001 {  // small epsilon for float rounding
+        ticks.append(v)
+        v += bestStep
+    }
+
+    return ticks
+}
+
+/// Format a tick value for display. Uses integer format when possible,
+/// otherwise minimal decimal places.
+public func formatTickValue(_ v: Double) -> String {
+    if v == 0 { return "0" }
+    if v == v.rounded() && abs(v) < 1e6 {
+        return String(format: "%.0f", v)
+    }
+    if abs(v) >= 0.01 && abs(v) < 1e6 {
+        // Remove trailing zeros
+        let s = String(format: "%.2f", v)
+        if s.contains(".") {
+            var trimmed = s
+            while trimmed.hasSuffix("0") { trimmed.removeLast() }
+            if trimmed.hasSuffix(".") { trimmed.removeLast() }
+            return trimmed
+        }
+        return s
+    }
+    return String(format: "%.1e", v)
+}
+
 // MARK: - CGRect convenience
 
 public extension CGRect {
