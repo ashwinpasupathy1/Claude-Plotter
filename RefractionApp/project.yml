@@ -31,6 +31,9 @@ targets:
         type: folder
         buildPhase: resources
       - path: Refraction/Resources/DocumentIcon.icns
+      - path: Refraction/Resources/StylePreviews
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: RefractionRenderer
     info:

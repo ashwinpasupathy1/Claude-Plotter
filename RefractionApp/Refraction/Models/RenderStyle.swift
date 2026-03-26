@@ -35,11 +35,16 @@ enum RenderStyle: String, CaseIterable, Identifiable, Codable {
 
     var palette: [String] {
         switch self {
-        case .default, .prism:
-            // Prism 10-color palette
+        case .default:
             return [
                 "#E8453C", "#2274A5", "#32936F", "#F18F01", "#A846A0",
                 "#6B4226", "#048A81", "#D4AC0D", "#3B1F2B", "#44BBA4",
+            ]
+        case .prism:
+            // GraphPad Prism 10 default palette (pure saturated, rendered at ~50% fill opacity)
+            return [
+                "#0000FF", "#FF0000", "#00C000", "#A020F0", "#FF8000",
+                "#00BFFF", "#FF00FF", "#808000", "#00FF00", "#800000",
             ]
         case .ggplot2:
             // ggplot2 default (hue_pal) approximation
@@ -137,25 +142,26 @@ enum RenderStyle: String, CaseIterable, Identifiable, Codable {
     // Matches GraphPad Prism 10 default appearance.
 
     private func applyPrism(graph: FormatGraphSettings, axes: FormatAxesSettings) {
-        // Symbols — filled, no border (Prism scatter/XY default)
+        // Symbols — filled circles, same color as bar, no border (Prism default)
         graph.showSymbols = true
-        graph.symbolColor = "#000000"
+        graph.symbolColor = "auto"       // Uses group color (same as bar)
         graph.symbolShape = .circle
         graph.symbolSize = 7.0
         graph.symbolBorderColor = "#000000"
         graph.symbolBorderThickness = 0.0
 
-        // Bars — solid fill, NO border (Prism default bar appearance)
+        // Bars — saturated fill at ~50% opacity, solid full-color border
         graph.showBars = true
-        graph.barWidth = 0.65
-        graph.barBorderColor = "#000000"
-        graph.barBorderThickness = 0.0
+        graph.barWidth = 0.55            // Prism bars are moderately wide with clear gaps
+        graph.barFillOpacity = 0.50      // Prism uses ~50% opacity fill
+        graph.barBorderColor = "auto"    // Border matches group color (full saturation)
+        graph.barBorderThickness = 1.5   // Visible solid border
         graph.barPattern = .solid
 
-        // Error bars — black T-caps, medium weight
+        // Error bars — black T-caps, thin
         graph.showErrorBars = true
         graph.errorBarColor = "#000000"
-        graph.errorBarThickness = 1.2
+        graph.errorBarThickness = 1.0
         graph.errorBarStyle = .tCap
         graph.errorBarDirection = .both
 
@@ -172,7 +178,7 @@ enum RenderStyle: String, CaseIterable, Identifiable, Codable {
         graph.showLegend = true
 
         // Axes — L-shaped (left + bottom only), NO grid, bold spines
-        axes.axisThickness = 1.5
+        axes.axisThickness = 2.0         // Prism uses thick axis lines
         axes.axisColor = "#000000"
         axes.plotAreaColor = "clear"
         axes.pageBackground = "clear"
@@ -182,13 +188,13 @@ enum RenderStyle: String, CaseIterable, Identifiable, Codable {
         axes.minorGrid = .none
         axes.xAxisTickDirection = .out    // Outward-facing ticks
         axes.yAxisTickDirection = .out
-        axes.xAxisTickLength = 6
-        axes.yAxisTickLength = 6
-        axes.xAxisLabelRotation = 0
+        axes.xAxisTickLength = 7
+        axes.yAxisTickLength = 7
+        axes.xAxisLabelRotation = 45     // Prism default: 45° rotated labels
         axes.globalFontName = "Arial Bold"
-        axes.chartTitleFontSize = 12
-        axes.xAxisTitleFontSize = 12
-        axes.yAxisTitleFontSize = 12
+        axes.chartTitleFontSize = 14
+        axes.xAxisTitleFontSize = 14
+        axes.yAxisTitleFontSize = 14
         axes.xAxisLabelFontSize = 12
         axes.yAxisLabelFontSize = 12
     }

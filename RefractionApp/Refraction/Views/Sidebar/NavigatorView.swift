@@ -24,6 +24,7 @@ struct NavigatorView: View {
     /// Cached UUID of the item currently being dragged, set on dropEntered
     /// so performDrop can resolve it synchronously (no async loadItem delay).
     @State private var draggedItemID: UUID?
+    @State private var lastDropTime: Date?
 
     enum DropEdge { case top, bottom }
 
@@ -74,8 +75,8 @@ struct NavigatorView: View {
                     DebugLog.shared.logUI("expand all experiments")
                     expandedExperiments = Set(appState.experiments.map(\.id))
                 } label: {
-                    Image(systemName: "chevron.down.2")
-                        .font(.caption)
+                    Image(systemName: "chevron.down")
+                        .font(.caption2.bold())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -85,8 +86,8 @@ struct NavigatorView: View {
                     DebugLog.shared.logUI("collapse all experiments")
                     expandedExperiments.removeAll()
                 } label: {
-                    Image(systemName: "chevron.up.2")
-                        .font(.caption)
+                    Image(systemName: "chevron.up")
+                        .font(.caption2.bold())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -293,7 +294,7 @@ struct NavigatorView: View {
             targetID: experiment.id,
             dropTargetID: $dropTargetID,
             dropEdge: $dropEdge,
-            isDragging: $isDragging, draggedItemID: $draggedItemID,
+            isDragging: $isDragging, draggedItemID: $draggedItemID, lastDropTime: $lastDropTime,
             onDrop: { droppedID, edge in
                 guard droppedID != experiment.id,
                       let fromIndex = appState.experiments.firstIndex(where: { $0.id == droppedID }),
@@ -326,7 +327,7 @@ struct NavigatorView: View {
                         }
                     }
                     .onDrop(of: [.text], delegate: ReorderDropDelegate(
-                        targetID: table.id, dropTargetID: $dropTargetID, dropEdge: $dropEdge, isDragging: $isDragging, draggedItemID: $draggedItemID,
+                        targetID: table.id, dropTargetID: $dropTargetID, dropEdge: $dropEdge, isDragging: $isDragging, draggedItemID: $draggedItemID, lastDropTime: $lastDropTime,
                         onDrop: { droppedID, edge in
                             guard droppedID != table.id,
                                   let fromIndex = experiment.dataTables.firstIndex(where: { $0.id == droppedID }),
@@ -370,7 +371,7 @@ struct NavigatorView: View {
                         }
                     }
                     .onDrop(of: [.text], delegate: ReorderDropDelegate(
-                        targetID: graph.id, dropTargetID: $dropTargetID, dropEdge: $dropEdge, isDragging: $isDragging, draggedItemID: $draggedItemID,
+                        targetID: graph.id, dropTargetID: $dropTargetID, dropEdge: $dropEdge, isDragging: $isDragging, draggedItemID: $draggedItemID, lastDropTime: $lastDropTime,
                         onDrop: { droppedID, edge in
                             guard droppedID != graph.id,
                                   let fromIndex = experiment.graphs.firstIndex(where: { $0.id == droppedID }),
@@ -415,7 +416,7 @@ struct NavigatorView: View {
                         }
                     }
                     .onDrop(of: [.text], delegate: ReorderDropDelegate(
-                        targetID: analysis.id, dropTargetID: $dropTargetID, dropEdge: $dropEdge, isDragging: $isDragging, draggedItemID: $draggedItemID,
+                        targetID: analysis.id, dropTargetID: $dropTargetID, dropEdge: $dropEdge, isDragging: $isDragging, draggedItemID: $draggedItemID, lastDropTime: $lastDropTime,
                         onDrop: { droppedID, edge in
                             guard droppedID != analysis.id,
                                   let fromIndex = experiment.analyses.firstIndex(where: { $0.id == droppedID }),
@@ -648,9 +649,18 @@ struct ReorderDropDelegate: DropDelegate {
     @Binding var dropEdge: NavigatorView.DropEdge
     @Binding var isDragging: Bool
     @Binding var draggedItemID: UUID?
+    /// Timestamp when a drop was last completed. Any callbacks within 500ms are ignored.
+    @Binding var lastDropTime: Date?
     let onDrop: (UUID, NavigatorView.DropEdge) -> Void
 
+    /// Whether we're in the post-drop ignore window (macOS sends spurious callbacks after performDrop).
+    private var isInPostDropWindow: Bool {
+        if let t = lastDropTime { return Date().timeIntervalSince(t) < 0.5 }
+        return false
+    }
+
     func dropEntered(info: DropInfo) {
+        guard !isInPostDropWindow else { return }
         isDragging = true
         dropTargetID = targetID
         // Cache the dragged item ID on first enter so performDrop can use it synchronously
@@ -667,6 +677,7 @@ struct ReorderDropDelegate: DropDelegate {
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
+        guard !isInPostDropWindow else { return DropProposal(operation: .move) }
         dropTargetID = targetID
         dropEdge = info.location.y < 12 ? .top : .bottom
         return DropProposal(operation: .move)
@@ -682,6 +693,7 @@ struct ReorderDropDelegate: DropDelegate {
         let savedEdge = dropEdge
         isDragging = false
         dropTargetID = nil
+        lastDropTime = Date()
         // Use the cached ID for instant reorder — no async delay
         if let droppedID = draggedItemID {
             draggedItemID = nil

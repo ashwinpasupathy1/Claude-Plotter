@@ -593,6 +593,8 @@ final class AppState {
         projectFilePath = nil
         hasUnsavedChanges = false
         error = nil
+        undoManager.removeAllActions()
+        refreshUndoState()
     }
 
     // MARK: - Open .refract File

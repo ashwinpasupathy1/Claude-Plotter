@@ -201,16 +201,21 @@ struct ToolbarBanner: View {
             HStack(spacing: 6) {
                 activeButton(icon: "arrow.uturn.backward", label: "Undo",
                              color: appState.canUndo ? .blue : .gray) {
+                    let desc = appState.undoManager.undoActionName
                     appState.undoManager.undo()
                     appState.refreshUndoState()
-                    DebugLog.shared.logAppEvent("undo()")
+                    DebugLog.shared.logUI("undo: \(desc.isEmpty ? "(empty)" : desc)")
                 }
+                .disabled(!appState.canUndo)
+
                 activeButton(icon: "arrow.uturn.forward", label: "Redo",
                              color: appState.canRedo ? .blue : .gray) {
+                    let desc = appState.undoManager.redoActionName
                     appState.undoManager.redo()
                     appState.refreshUndoState()
-                    DebugLog.shared.logAppEvent("redo()")
+                    DebugLog.shared.logUI("redo: \(desc.isEmpty ? "(empty)" : desc)")
                 }
+                .disabled(!appState.canRedo)
             }
             groupLabel("Undo")
         }

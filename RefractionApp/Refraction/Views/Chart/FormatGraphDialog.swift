@@ -93,6 +93,7 @@ struct FormatGraphDialog: View {
         settings.showBars = restored.showBars
         settings.barColor = restored.barColor
         settings.barWidth = restored.barWidth
+        settings.barFillOpacity = restored.barFillOpacity
         settings.barBorderColor = restored.barBorderColor
         settings.barBorderThickness = restored.barBorderThickness
         settings.barPattern = restored.barPattern

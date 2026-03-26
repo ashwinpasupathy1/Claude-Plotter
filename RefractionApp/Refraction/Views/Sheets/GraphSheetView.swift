@@ -42,7 +42,8 @@ struct GraphSheetView: View {
         return applyFormatSettings(
             spec: baseSpec,
             graphSettings: graph.formatSettings,
-            axesSettings: graph.formatAxesSettings
+            axesSettings: graph.formatAxesSettings,
+            renderStyle: graph.renderStyle
         )
     }
 
