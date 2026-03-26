@@ -1237,3 +1237,115 @@ def recommend_test(
                 ),
                 "checks": checks,
             }
+
+
+# ---------------------------------------------------------------------------
+# Axis tick computation (R-style pretty())
+# ---------------------------------------------------------------------------
+
+def pretty_ticks(
+    lo: float, hi: float, target_count: int = 6
+) -> tuple[list[float], float, float]:
+    """Compute nice tick positions for an axis range.
+
+    Mimics R's pretty() / matplotlib's MaxNLocator. Prefers round numbers
+    that are multiples of 1, 2, 2.5, or 5 × 10^n.
+
+    Returns (ticks, axis_min, axis_max).
+    """
+    if hi <= lo:
+        return [lo], lo, lo + 1
+
+    raw_step = (hi - lo) / max(target_count - 1, 1)
+    magnitude = 10 ** math.floor(math.log10(raw_step)) if raw_step > 0 else 1
+
+    candidates = [c * magnitude for c in [1, 2, 2.5, 5, 10]]
+
+    best_step = candidates[0]
+    best_diff = abs(int((hi - lo) / candidates[0]) + 1 - target_count)
+    for step in candidates[1:]:
+        n_ticks = int(math.floor(hi / step) - math.ceil(lo / step)) + 1
+        diff = abs(n_ticks - target_count)
+        if diff < best_diff or (diff == best_diff and step > best_step):
+            best_diff = diff
+            best_step = step
+
+    first = math.ceil(lo / best_step) * best_step
+    last = math.floor(hi / best_step) * best_step
+
+    if lo <= 0 <= hi:
+        first = min(first, 0)
+        last = max(last, 0)
+
+    ticks = []
+    v = first
+    while v <= last + best_step * 0.001:
+        ticks.append(round(v, 10))
+        v += best_step
+
+    axis_min = ticks[0] if ticks else lo
+    axis_max = ticks[-1] if ticks else hi
+    return ticks, axis_min, axis_max
+
+
+def format_tick_value(v: float) -> str:
+    """Format a tick value for display."""
+    if v == 0:
+        return "0"
+    if v == int(v) and abs(v) < 1e6:
+        return str(int(v))
+    if 0.01 <= abs(v) < 1e6:
+        return f"{v:.2f}".rstrip("0").rstrip(".")
+    return f"{v:.1e}"
+
+
+def compute_axis_range(
+    values: list[float],
+    error_values: list[float] | None = None,
+    include_zero: bool = True,
+    padding_fraction: float = 0.1,
+    scale: str = "linear",
+    target_ticks: int = 6,
+) -> dict:
+    """Compute complete axis specification from data values.
+
+    Returns dict with: range_min, range_max, ticks, tick_labels.
+    """
+    if not values:
+        ticks, axis_min, axis_max = pretty_ticks(0, 10, target_ticks)
+        return {
+            "range_min": axis_min,
+            "range_max": axis_max,
+            "ticks": ticks,
+            "tick_labels": [format_tick_value(t) for t in ticks],
+        }
+
+    lo = min(values)
+    hi = max(values)
+
+    if error_values:
+        for i, ev in enumerate(error_values):
+            if i < len(values):
+                hi = max(hi, values[i] + ev)
+                lo = min(lo, values[i] - ev)
+
+    if include_zero and lo >= 0:
+        lo = 0
+
+    span = hi - lo if hi > lo else abs(hi) if hi != 0 else 1
+    padding = span * padding_fraction
+    if lo < 0:
+        lo -= padding
+    hi += padding
+
+    if scale == "log":
+        lo = max(lo, 1e-10)
+        hi = max(hi, lo * 10)
+
+    ticks, axis_min, axis_max = pretty_ticks(lo, hi, target_ticks)
+    return {
+        "range_min": axis_min,
+        "range_max": axis_max,
+        "ticks": ticks,
+        "tick_labels": [format_tick_value(t) for t in ticks],
+    }

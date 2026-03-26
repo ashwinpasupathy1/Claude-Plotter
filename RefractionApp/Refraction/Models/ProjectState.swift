@@ -1,28 +1,44 @@
-// ProjectState.swift — Codable snapshot of the navigator tree for JSON persistence.
+// ProjectState.swift — Lightweight Codable snapshot of the navigator tree.
+// Persisted to ~/.refraction/project.json for session restore.
 
 import Foundation
 
 struct ProjectState: Codable {
+    var experiments: [ExperimentState]
+    var activeExperimentID: String?
+    var activeItemID: String?
+    var activeItemKind: String?
 
-    struct TableState: Codable {
-        let id: String
+    struct ExperimentState: Codable {
+        var id: String
         var label: String
-        let tableType: String
-        var dataFilePath: String?
-        var sheets: [SheetState]
+        var dataTables: [DataTableState]
+        var graphs: [GraphState]
+        var analyses: [AnalysisState]
     }
 
-    struct SheetState: Codable {
-        let id: String
+    struct DataTableState: Codable {
+        var id: String
         var label: String
-        let kind: String
-        var chartType: String?
+        var tableType: String
+        var dataFilePath: String?
+        var originalFileName: String?
+    }
+
+    struct GraphState: Codable {
+        var id: String
+        var label: String
+        var dataTableID: String
+        var chartType: String
+    }
+
+    struct AnalysisState: Codable {
+        var id: String
+        var label: String
+        var dataTableID: String
+        var analysisType: String
         var notes: String?
     }
-
-    var dataTables: [TableState]
-    var activeDataTableID: String?
-    var activeSheetID: String?
 
     // MARK: - Persistence path
 
@@ -32,7 +48,6 @@ struct ProjectState: Codable {
         return dir.appendingPathComponent("project.json")
     }
 
-    /// Write pretty-printed JSON to ~/.refraction/project.json.
     func writeToDisk() {
         let dir = Self.projectFileURL.deletingLastPathComponent()
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -42,7 +57,6 @@ struct ProjectState: Codable {
         try? data.write(to: Self.projectFileURL, options: .atomic)
     }
 
-    /// Read from ~/.refraction/project.json, if it exists.
     static func readFromDisk() -> ProjectState? {
         guard let data = try? Data(contentsOf: projectFileURL) else { return nil }
         return try? JSONDecoder().decode(ProjectState.self, from: data)

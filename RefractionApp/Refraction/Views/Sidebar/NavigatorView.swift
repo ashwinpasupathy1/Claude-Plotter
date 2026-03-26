@@ -1,5 +1,5 @@
-// NavigatorView.swift — Prism-style sidebar navigator.
-// Sheets organized under subheaders: Data Tables, Info, Results, Graphs.
+// NavigatorView.swift — Experiment-based sidebar navigator.
+// Each experiment has sections: Data Tables, Graphs, Results.
 
 import SwiftUI
 
@@ -7,70 +7,154 @@ struct NavigatorView: View {
 
     @Environment(AppState.self) private var appState
 
-    @State private var tableToDelete: DataTable?
+    @State private var experimentToDelete: Experiment?
     @State private var editingID: UUID?
     @State private var showAnalyzeDialog = false
-    @State private var analyzeTableID: UUID?
+    @State private var showNewExperimentDialog = false
+    @State private var showNewDataTableDialog = false
+    @State private var showNewGraphDialog = false
+    @State private var newDataTableExperimentID: UUID?
+    @State private var searchText: String = ""
+    @State private var expandedExperiments: Set<UUID> = []
+    @FocusState private var searchFocused: Bool
+
+    /// Whether an item matches the current search query.
+    private func matches(_ text: String) -> Bool {
+        searchText.isEmpty || text.localizedCaseInsensitiveContains(searchText)
+    }
+
+    /// Filter an experiment's children, returning only matching items.
+    /// Returns nil if nothing in the experiment matches.
+    private struct FilteredExperiment {
+        let experiment: Experiment
+        let dataTables: [DataTable]
+        let graphs: [Graph]
+        let analyses: [Analysis]
+        var hasAnyMatch: Bool { !dataTables.isEmpty || !graphs.isEmpty || !analyses.isEmpty || nameMatches }
+        let nameMatches: Bool
+    }
+
+    private func filtered(_ experiment: Experiment) -> FilteredExperiment {
+        let nameMatches = matches(experiment.label)
+        if searchText.isEmpty || nameMatches {
+            // Experiment name matches or no search — show everything
+            return FilteredExperiment(
+                experiment: experiment,
+                dataTables: experiment.dataTables,
+                graphs: experiment.graphs,
+                analyses: experiment.analyses,
+                nameMatches: nameMatches
+            )
+        }
+        // Filter children individually
+        return FilteredExperiment(
+            experiment: experiment,
+            dataTables: experiment.dataTables.filter { matches($0.label) || matches($0.tableType.label) },
+            graphs: experiment.graphs.filter { matches($0.label) || matches($0.chartType.label) },
+            analyses: experiment.analyses.filter { matches($0.label) || matches($0.analysisType ?? "") },
+            nameMatches: false
+        )
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            newTableButton
+            newExperimentButton
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
 
+            // Search bar
+            HStack(spacing: 4) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.tertiary)
+                    .font(.caption)
+                TextField("Search...", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .font(.caption)
+                    .focused($searchFocused)
+                    .onAppear { searchFocused = false }
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                        searchFocused = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.tertiary)
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color(nsColor: .controlBackgroundColor))
+
             Divider()
 
-            if appState.dataTables.isEmpty {
+            if appState.experiments.isEmpty {
                 emptyState
             } else {
-                tableList
+                experimentList
             }
         }
         .listStyle(.sidebar)
+        .onAppear {
+            // Auto-expand all experiments on launch
+            expandedExperiments = Set(appState.experiments.map(\.id))
+        }
+        .onChange(of: appState.experiments.count) { _, _ in
+            // Auto-expand newly added experiments
+            expandedExperiments = Set(appState.experiments.map(\.id))
+        }
         .alert(
-            "Delete Data Table?",
+            "Delete Experiment?",
             isPresented: Binding(
-                get: { tableToDelete != nil },
-                set: { if !$0 { tableToDelete = nil } }
+                get: { experimentToDelete != nil },
+                set: { if !$0 { experimentToDelete = nil } }
             )
         ) {
             Button("Delete", role: .destructive) {
-                if let table = tableToDelete {
-                    appState.removeDataTable(id: table.id)
+                if let exp = experimentToDelete {
+                    appState.removeExperiment(id: exp.id)
                 }
-                tableToDelete = nil
+                experimentToDelete = nil
             }
-            Button("Cancel", role: .cancel) { tableToDelete = nil }
+            Button("Cancel", role: .cancel) { experimentToDelete = nil }
         } message: {
-            if let table = tableToDelete {
-                Text("Are you sure you want to delete \"\(table.label)\"? This will remove the table and all its sheets.")
+            if let exp = experimentToDelete {
+                Text("Are you sure you want to delete \"\(exp.label)\"? This will remove all data tables, graphs, and analyses.")
             }
         }
         .sheet(isPresented: $showAnalyzeDialog) {
             AnalyzeDataDialog()
                 .environment(appState)
         }
+        .sheet(isPresented: $showNewExperimentDialog) {
+            NewExperimentDialog()
+                .environment(appState)
+        }
+        .sheet(isPresented: $showNewDataTableDialog) {
+            NewDataTableDialog()
+                .environment(appState)
+        }
+        .sheet(isPresented: $showNewGraphDialog) {
+            NewGraphDialog()
+                .environment(appState)
+        }
     }
 
-    // MARK: - New Table Button
+    // MARK: - New Experiment Button
 
-    private var newTableButton: some View {
-        Menu {
-            ForEach(TableType.allCases) { type in
-                Button {
-                    appState.addDataTable(type: type)
-                } label: {
-                    Label(type.label, systemImage: type.sfSymbol)
-                }
-            }
+    private var newExperimentButton: some View {
+        Button {
+            showNewExperimentDialog = true
         } label: {
             HStack {
                 Image(systemName: "plus.circle.fill")
-                Text("New Data Table")
+                Text("New Experiment")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .menuStyle(.borderlessButton)
+        .buttonStyle(.plain)
     }
 
     // MARK: - Empty State
@@ -78,13 +162,13 @@ struct NavigatorView: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Spacer()
-            Image(systemName: "tablecells.badge.ellipsis")
+            Image(systemName: "flask")
                 .font(.system(size: 36))
                 .foregroundStyle(.quaternary)
-            Text("No data tables")
+            Text("No experiments")
                 .font(.headline)
                 .foregroundStyle(.secondary)
-            Text("Create a new data table to get started.")
+            Text("Create a new experiment to get started.")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
@@ -93,118 +177,195 @@ struct NavigatorView: View {
         .padding()
     }
 
-    // MARK: - Table List
+    // MARK: - Experiment List
 
-    private var tableList: some View {
-        List(selection: Binding(
-            get: { appState.activeSheetID },
-            set: { id in
-                if let id { appState.selectSheet(id) }
-            }
-        )) {
-            ForEach(appState.dataTables) { table in
-                dataTableSection(table)
-            }
+    /// Pre-built lookup: item UUID → (experimentID, kind). Avoids linear scan on every click.
+    private var itemKindMap: [UUID: (experimentID: UUID, kind: ItemKind)] {
+        var map: [UUID: (UUID, ItemKind)] = [:]
+        for exp in appState.experiments {
+            for t in exp.dataTables { map[t.id] = (exp.id, .dataTable) }
+            for g in exp.graphs { map[g.id] = (exp.id, .graph) }
+            for a in exp.analyses { map[a.id] = (exp.id, .analysis) }
         }
+        return map
     }
-
-    // MARK: - Data Table Section (Prism-style subheaders)
 
     @ViewBuilder
-    private func dataTableSection(_ table: DataTable) -> some View {
-        let dataSheets = table.sheets.filter { $0.kind == .dataTable }
-        let infoSheets = table.sheets.filter { $0.kind == .info }
-        let resultSheets = table.sheets.filter { $0.kind == .results }
-        let graphSheets = table.sheets.filter { $0.kind == .graph }
-
-        DisclosureGroup {
-            // Data Tables subheader
-            if !dataSheets.isEmpty {
-                Section("Data Tables") {
-                    ForEach(dataSheets) { sheet in
-                        sheetRow(sheet, table: table)
-                            .tag(sheet.id)
+    private var experimentList: some View {
+        let kindMap = itemKindMap
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(appState.experiments) { experiment in
+                    let f = filtered(experiment)
+                    if f.hasAnyMatch {
+                        experimentSection(experiment, filtered: f, kindMap: kindMap)
                     }
                 }
             }
-
-            // Info subheader
-            Section("Info") {
-                ForEach(infoSheets) { sheet in
-                    sheetRow(sheet, table: table)
-                        .tag(sheet.id)
-                }
-            }
-
-            // Results subheader
-            Section {
-                ForEach(resultSheets) { sheet in
-                    sheetRow(sheet, table: table)
-                        .tag(sheet.id)
-                }
-                // New Analysis... button
-                Button {
-                    appState.activeDataTableID = table.id
-                    analyzeTableID = table.id
-                    showAnalyzeDialog = true
-                } label: {
-                    Label("New Analysis...", systemImage: "plus")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            } header: {
-                Text("Results")
-            }
-
-            // Graphs subheader
-            Section {
-                ForEach(graphSheets) { sheet in
-                    sheetRow(sheet, table: table)
-                        .tag(sheet.id)
-                }
-                // New Graph... menu
-                Menu {
-                    ForEach(table.availableChartTypes) { chartType in
-                        Button {
-                            appState.activeDataTableID = table.id
-                            appState.addGraph(chartType: chartType)
-                        } label: {
-                            Label(chartType.label, systemImage: chartType.sfSymbol)
-                        }
-                    }
-                } label: {
-                    Label("New Graph...", systemImage: "plus")
-                        .foregroundStyle(.secondary)
-                }
-                .menuStyle(.borderlessButton)
-            } header: {
-                Text("Graphs")
-            }
-        } label: {
-            tableHeader(table)
         }
     }
 
-    // MARK: - Table Header
+    // MARK: - Experiment Section
 
-    private func tableHeader(_ table: DataTable) -> some View {
+    private func selectItem(_ id: UUID, kindMap: [UUID: (experimentID: UUID, kind: ItemKind)]) {
+        guard let entry = kindMap[id] else { return }
+        appState.activeExperimentID = entry.experimentID
+        appState.activeItemID = id
+        appState.activeItemKind = entry.kind
+    }
+
+    @ViewBuilder
+    private func experimentSection(_ experiment: Experiment, filtered f: FilteredExperiment, kindMap: [UUID: (experimentID: UUID, kind: ItemKind)]) -> some View {
+        let isExpanded = expandedExperiments.contains(experiment.id)
+
+        // Header row with manual chevron
+        Button {
+            if expandedExperiments.contains(experiment.id) {
+                expandedExperiments.remove(experiment.id)
+            } else {
+                expandedExperiments.insert(experiment.id)
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 12)
+                experimentHeader(experiment)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+
+        if isExpanded {
+            // Data Tables
+            if !f.dataTables.isEmpty || searchText.isEmpty {
+                sectionLabel("Data Tables")
+                ForEach(f.dataTables) { table in
+                    itemRow(isSelected: appState.activeItemID == table.id) {
+                        selectItem(table.id, kindMap: kindMap)
+                    } content: {
+                        dataTableRow(table, experiment: experiment)
+                    }
+                }
+                if searchText.isEmpty {
+                    Button {
+                        appState.activeExperimentID = experiment.id
+                        showNewDataTableDialog = true
+                    } label: {
+                        Label("New Data Table...", systemImage: "plus")
+                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 36)
+                    .padding(.vertical, 2)
+                }
+            }
+
+            // Graphs
+            if !f.graphs.isEmpty || searchText.isEmpty {
+                sectionLabel("Graphs")
+                ForEach(f.graphs) { graph in
+                    itemRow(isSelected: appState.activeItemID == graph.id) {
+                        selectItem(graph.id, kindMap: kindMap)
+                    } content: {
+                        graphRow(graph, experiment: experiment)
+                    }
+                }
+                if searchText.isEmpty {
+                    Button {
+                        appState.activeExperimentID = experiment.id
+                        showNewGraphDialog = true
+                    } label: {
+                        Label("New Graph...", systemImage: "plus")
+                            .foregroundStyle(experiment.hasData ? .secondary : .quaternary)
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 36)
+                    .padding(.vertical, 2)
+                    .disabled(!experiment.hasData)
+                }
+            }
+
+            // Results
+            if !f.analyses.isEmpty || searchText.isEmpty {
+                sectionLabel("Results")
+                ForEach(f.analyses) { analysis in
+                    itemRow(isSelected: appState.activeItemID == analysis.id) {
+                        selectItem(analysis.id, kindMap: kindMap)
+                    } content: {
+                        analysisRow(analysis, experiment: experiment)
+                    }
+                }
+                if searchText.isEmpty {
+                    Button {
+                        appState.activeExperimentID = experiment.id
+                        showAnalyzeDialog = true
+                    } label: {
+                        Label("New Analysis...", systemImage: "plus")
+                            .foregroundStyle(experiment.hasData ? .secondary : .quaternary)
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 36)
+                    .padding(.vertical, 2)
+                    .disabled(!experiment.hasData)
+                }
+            }
+
+            Divider()
+                .padding(.vertical, 4)
+        }
+    }
+
+    // MARK: - Reusable row with selection highlight
+
+    private func itemRow<Content: View>(isSelected: Bool, action: @escaping () -> Void, @ViewBuilder content: () -> Content) -> some View {
+        Button(action: action) {
+            content()
+                .padding(.horizontal, 12)
+                .padding(.leading, 20)
+                .padding(.vertical, 3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func sectionLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(.tertiary)
+            .textCase(.uppercase)
+            .padding(.leading, 28)
+            .padding(.top, 6)
+            .padding(.bottom, 2)
+    }
+
+    // MARK: - Experiment Header
+
+    private func experimentHeader(_ experiment: Experiment) -> some View {
         HStack {
-            Image(systemName: table.tableType.sfSymbol)
+            Image(systemName: "flask")
                 .foregroundStyle(.secondary)
-            if editingID == table.id {
-                TextField("Name", text: Bindable(table).label)
+            if editingID == experiment.id {
+                TextField("Name", text: Bindable(experiment).label)
                     .textFieldStyle(.plain)
                     .fontWeight(.semibold)
                     .onSubmit { editingID = nil }
             } else {
-                Text(table.label)
+                Text(experiment.label)
                     .fontWeight(.semibold)
                     .lineLimit(1)
-                    .onTapGesture(count: 2) { editingID = table.id }
             }
             Spacer()
             Button {
-                tableToDelete = table
+                experimentToDelete = experiment
             } label: {
                 Image(systemName: "xmark.circle")
                     .foregroundStyle(.tertiary)
@@ -212,44 +373,95 @@ struct NavigatorView: View {
             .buttonStyle(.plain)
         }
         .contextMenu {
-            Button("Rename") { editingID = table.id }
-            Button("Delete", role: .destructive) { tableToDelete = table }
+            Button("Rename") { editingID = experiment.id }
+            Button("Delete", role: .destructive) { experimentToDelete = experiment }
         }
     }
 
-    // MARK: - Sheet Row
+    // MARK: - Row Views
 
-    private func sheetRow(_ sheet: Sheet, table: DataTable) -> some View {
+    private func dataTableRow(_ table: DataTable, experiment: Experiment) -> some View {
         Label {
-            if editingID == sheet.id {
-                TextField("Name", text: Bindable(sheet).label)
+            if editingID == table.id {
+                TextField("Name", text: Bindable(table).label)
                     .textFieldStyle(.plain)
                     .onSubmit { editingID = nil }
             } else {
-                Text(sheet.label)
-                    .lineLimit(1)
-                    .onTapGesture(count: 2) { editingID = sheet.id }
+                HStack {
+                    Text(table.label)
+                        .lineLimit(1)
+                    Text("(\(table.tableType.label))")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
             }
         } icon: {
-            Image(systemName: sheet.sfSymbol)
-                .foregroundStyle(iconColor(for: sheet))
+            Image(systemName: table.sfSymbol)
+                .foregroundStyle(.secondary)
         }
         .contextMenu {
-            Button("Rename") { editingID = sheet.id }
-            if sheet.kind != .dataTable {
+            Button("Rename") { editingID = table.id }
+            if experiment.dataTables.count > 1 {
                 Button("Delete", role: .destructive) {
-                    table.removeSheet(id: sheet.id)
+                    appState.removeDataTable(id: table.id)
                 }
             }
         }
     }
 
-    private func iconColor(for sheet: Sheet) -> Color {
-        switch sheet.kind {
-        case .graph:    return .blue
-        case .results:  return .orange
-        case .info:     return .green
-        case .dataTable: return .secondary
+    private func graphRow(_ graph: Graph, experiment: Experiment) -> some View {
+        let tableName = experiment.dataTable(for: graph)?.label ?? "—"
+        return Label {
+            if editingID == graph.id {
+                TextField("Name", text: Bindable(graph).label)
+                    .textFieldStyle(.plain)
+                    .onSubmit { editingID = nil }
+            } else {
+                HStack {
+                    Text(graph.label)
+                        .lineLimit(1)
+                    Text("→ \(tableName)")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        } icon: {
+            Image(systemName: graph.chartType.sfSymbol)
+                .foregroundStyle(.blue)
+        }
+        .contextMenu {
+            Button("Rename") { editingID = graph.id }
+            Button("Delete", role: .destructive) {
+                appState.removeGraph(id: graph.id)
+            }
+        }
+    }
+
+    private func analysisRow(_ analysis: Analysis, experiment: Experiment) -> some View {
+        let tableName = experiment.dataTable(for: analysis)?.label ?? "—"
+        return Label {
+            if editingID == analysis.id {
+                TextField("Name", text: Bindable(analysis).label)
+                    .textFieldStyle(.plain)
+                    .onSubmit { editingID = nil }
+            } else {
+                HStack {
+                    Text(analysis.label)
+                        .lineLimit(1)
+                    Text("→ \(tableName)")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        } icon: {
+            Image(systemName: "list.clipboard")
+                .foregroundStyle(.orange)
+        }
+        .contextMenu {
+            Button("Rename") { editingID = analysis.id }
+            Button("Delete", role: .destructive) {
+                appState.removeAnalysis(id: analysis.id)
+            }
         }
     }
 }

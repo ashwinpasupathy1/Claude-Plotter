@@ -64,7 +64,7 @@ struct ConfigTabView: View {
             case .style:
                 StyleTabView()
             case .stats:
-                let chartType = appState.activeSheet?.chartType
+                let chartType = appState.activeGraph?.chartType
                 if chartType?.hasStats == true {
                     StatsTabView()
                 } else {

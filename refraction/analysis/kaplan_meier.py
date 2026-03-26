@@ -86,13 +86,19 @@ def analyze_kaplan_meier(kw: dict) -> ChartSpec:
 
     curves = []
     for gi, (name, col_start) in enumerate(zip(group_names, group_cols)):
-        time_col = data_rows.iloc[:, col_start]
-        event_col = data_rows.iloc[:, col_start + 1]
+        time_col = pd.to_numeric(data_rows.iloc[:, col_start], errors="coerce")
+        event_col = pd.to_numeric(data_rows.iloc[:, col_start + 1], errors="coerce")
 
-        times = pd.to_numeric(time_col, errors="coerce").dropna().values
-        events = pd.to_numeric(event_col, errors="coerce").dropna().values
+        # Prism convention: rows with a valid time are included.
+        # Empty/NaN event values are treated as censored (0).
+        valid_mask = time_col.notna()
+        times = time_col[valid_mask].values
+        events = event_col[valid_mask].fillna(0).values
 
-        n = min(len(times), len(events))
+        # Clamp events to 0/1 (anything > 0 is an event)
+        events = (events > 0).astype(float)
+
+        n = len(times)
         if n == 0:
             curves.append({
                 "name": name,
@@ -104,9 +110,6 @@ def analyze_kaplan_meier(kw: dict) -> ChartSpec:
                 "color": colors[gi],
             })
             continue
-
-        times = times[:n]
-        events = events[:n]
 
         curve_t, curve_s, cens_t, cens_s = _kaplan_meier_curve(times, events)
 

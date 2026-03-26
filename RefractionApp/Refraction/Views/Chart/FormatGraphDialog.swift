@@ -11,6 +11,9 @@ struct FormatGraphDialog: View {
 
     @State private var selectedTab: Tab = .appearance
 
+    // Snapshot for cancel — restored if user clicks Cancel
+    @State private var snapshot: Data?
+
     enum Tab: String, CaseIterable {
         case appearance = "Appearance"
         case graphSettings = "Graph Settings"
@@ -53,15 +56,60 @@ struct FormatGraphDialog: View {
             // Bottom buttons
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button("OK") { dismiss() }
+                Button("Cancel") {
+                    restoreSnapshot()
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+                Button("Done") { dismiss() }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
             }
             .padding(12)
         }
         .frame(width: 520)
+        .onAppear { takeSnapshot() }
+    }
+
+    // MARK: - Snapshot / Restore
+
+    private func takeSnapshot() {
+        snapshot = try? JSONEncoder().encode(settings)
+    }
+
+    private func restoreSnapshot() {
+        guard let data = snapshot,
+              let restored = try? JSONDecoder().decode(FormatGraphSettings.self, from: data) else { return }
+        settings.showSymbols = restored.showSymbols
+        settings.symbolColor = restored.symbolColor
+        settings.symbolShape = restored.symbolShape
+        settings.symbolSize = restored.symbolSize
+        settings.symbolBorderColor = restored.symbolBorderColor
+        settings.symbolBorderThickness = restored.symbolBorderThickness
+        settings.showBars = restored.showBars
+        settings.barColor = restored.barColor
+        settings.barWidth = restored.barWidth
+        settings.barBorderColor = restored.barBorderColor
+        settings.barBorderThickness = restored.barBorderThickness
+        settings.barPattern = restored.barPattern
+        settings.barsBeginAtY = restored.barsBeginAtY
+        settings.showErrorBars = restored.showErrorBars
+        settings.errorBarColor = restored.errorBarColor
+        settings.errorBarDirection = restored.errorBarDirection
+        settings.errorBarStyle = restored.errorBarStyle
+        settings.errorBarThickness = restored.errorBarThickness
+        settings.showConnectingLine = restored.showConnectingLine
+        settings.lineColor = restored.lineColor
+        settings.lineThickness = restored.lineThickness
+        settings.lineStyle = restored.lineStyle
+        settings.connectMeans = restored.connectMeans
+        settings.startAtOrigin = restored.startAtOrigin
+        settings.showAreaFill = restored.showAreaFill
+        settings.areaFillColor = restored.areaFillColor
+        settings.areaFillPosition = restored.areaFillPosition
+        settings.areaFillAlpha = restored.areaFillAlpha
+        settings.showLegend = restored.showLegend
+        settings.labelPoints = restored.labelPoints
     }
 
     // MARK: - Appearance Tab

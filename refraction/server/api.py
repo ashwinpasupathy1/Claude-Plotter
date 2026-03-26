@@ -14,10 +14,22 @@ import pathlib
 import shutil
 import tempfile
 import threading
+import traceback
 import uuid
 from typing import Any, Optional
 
 _log = logging.getLogger(__name__)
+
+
+def _error_response(exc: Exception, status_code: int = 500) -> "JSONResponse":
+    """Build a JSON error response with full traceback for debugging."""
+    from starlette.responses import JSONResponse as _JR
+    tb_lines = traceback.format_exception(type(exc), exc, exc.__traceback__)
+    tb_str = "".join(tb_lines)
+    return _JR(
+        {"ok": False, "error": str(exc), "traceback": tb_str},
+        status_code=status_code,
+    )
 
 # -- Logging setup ---------------------------------------------------------
 _log_dir = os.path.expanduser("~/Library/Logs/Refraction")
@@ -106,14 +118,17 @@ def _to_chart_spec(result: dict, config: dict) -> dict:
         })
 
     # -- comparisons -> stats + brackets --
+    # Dedicated analyzers produce "annotations" (from StatsBracket);
+    # the generic engine produces "comparisons".  Handle both.
     comparisons_out = []
     brackets = []
     group_names = [g["name"] for g in groups]
-    for i, c in enumerate(result.get("comparisons", [])):
+    raw_comparisons = result.get("comparisons", []) or result.get("annotations", [])
+    for i, c in enumerate(raw_comparisons):
         if "error" in c:
             continue
         p = c.get("p_value", 1.0)
-        label = c.get("stars", "ns")
+        label = c.get("stars", c.get("label", "ns"))
         comparisons_out.append({
             "group_1": c.get("group_a", ""),
             "group_2": c.get("group_b", ""),
@@ -146,6 +161,29 @@ def _to_chart_spec(result: dict, config: dict) -> dict:
 
     error_type = config.get("error_type", config.get("error", "sem"))
 
+    # -- Compute Y-axis ticks from data --
+    from refraction.core.stats import compute_axis_range
+    y_values = []
+    y_errors = []
+    for g in groups:
+        vals = g["values"]
+        if vals["mean"] is not None:
+            y_values.append(vals["mean"])
+            err_key = error_type if error_type in ("sem", "sd", "ci95") else "sem"
+            err = vals.get(err_key, 0) or 0
+            y_errors.append(err)
+        for rv in vals.get("raw", []):
+            if isinstance(rv, (int, float)):
+                y_values.append(rv)
+
+    y_scale = config.get("yscale", "linear")
+    y_axis_info = compute_axis_range(
+        y_values,
+        error_values=y_errors if y_errors else None,
+        include_zero=True,
+        scale=y_scale,
+    )
+
     return {
         "chart_type": result.get("chart_type", "bar"),
         "groups": groups,
@@ -165,9 +203,11 @@ def _to_chart_spec(result: dict, config: dict) -> dict:
             "x_label": result.get("x_label", ""),
             "y_label": result.get("y_label", ""),
             "x_scale": "linear",
-            "y_scale": config.get("yscale", "linear"),
+            "y_scale": y_scale,
             "x_range": None,
-            "y_range": config.get("ylim"),
+            "y_range": [y_axis_info["range_min"], y_axis_info["range_max"]],
+            "y_ticks": y_axis_info["ticks"],
+            "y_tick_labels": y_axis_info["tick_labels"],
             "tick_direction": config.get("tick_dir", "out"),
             "spine_width": config.get("spine_width", 1.0),
             "font_size": config.get("font_size", 12.0),
@@ -269,6 +309,7 @@ def _make_app():
     class RenderRequest(BaseModel):
         chart_type: str
         kw: dict[str, Any] = {}
+        _debug: bool = False
 
     @api.post("/render")
     def render_endpoint(req: RenderRequest):
@@ -282,6 +323,7 @@ def _make_app():
             from refraction.analysis import analyze
 
             kw = dict(req.kw)
+            debug_mode = kw.pop("_debug", False) or req._debug
             excel_path = kw.pop("excel_path", "")
             path_err = _validate_data_path(excel_path)
             if path_err:
@@ -299,21 +341,57 @@ def _make_app():
             if "ytitle" in config and "y_label" not in config:
                 config["y_label"] = config.get("ytitle", "")
 
+            # Collect engine trace
+            trace = []
+            trace.append(f"analyze(chart_type={req.chart_type!r}, path={os.path.basename(excel_path)!r})")
+            trace.append(f"config keys: {sorted(config.keys())}")
+
             result = analyze(req.chart_type, excel_path, config)
 
             if not result.get("ok"):
                 return JSONResponse(
-                    {"ok": False, "error": result.get("error", "Analysis failed")},
+                    {"ok": False, "error": result.get("error", "Analysis failed"),
+                     "_trace": trace + [f"FAILED: {result.get('error', '?')}"]},
                     status_code=400,
                 )
 
-            return {"ok": True, "spec": _to_chart_spec(result, config)}
+            # Trace what the engine computed
+            groups = result.get("groups", [])
+            comparisons = result.get("comparisons", [])
+            trace.append(f"result: ok={result.get('ok')}, {len(groups)} groups, {len(comparisons)} comparisons")
+            if groups:
+                for g in groups[:5]:
+                    name = g.get("name", "?")
+                    n = g.get("n", "?")
+                    mean = g.get("mean")
+                    mean_str = f"{mean:.4f}" if isinstance(mean, (int, float)) else "?"
+                    trace.append(f"  group {name!r}: n={n}, mean={mean_str}")
+            if comparisons:
+                for c in comparisons[:5]:
+                    ga = c.get("group_a", "?")
+                    gb = c.get("group_b", "?")
+                    p = c.get("p_value")
+                    stars = c.get("stars", "")
+                    p_str = f"{p:.6f}" if isinstance(p, (int, float)) else "?"
+                    trace.append(f"  {ga} vs {gb}: p={p_str} {stars}")
+            analyzer = result.get("_analyzer", "generic")
+            trace.append(f"analyzer: {analyzer}")
+
+            resp = {"ok": True, "spec": _to_chart_spec(result, config)}
+            if debug_mode:
+                resp["_trace"] = trace
+            return resp
 
         except Exception as exc:
             _log.exception("Render failed for chart_type=%s", req.chart_type)
-            return JSONResponse(
-                {"ok": False, "error": str(exc)}, status_code=500,
-            )
+            tb_lines = traceback.format_exception(type(exc), exc, exc.__traceback__)
+            tb_str = "".join(tb_lines)
+            resp = {"ok": False, "error": str(exc), "traceback": tb_str}
+            if debug_mode:
+                resp["_trace"] = [f"EXCEPTION: {type(exc).__name__}: {exc}"] + [
+                    line.rstrip() for line in tb_lines if line.strip()
+                ]
+            return JSONResponse(resp, status_code=500)
 
     # ------------------------------------------------------------------
     # File upload
@@ -330,6 +408,8 @@ def _make_app():
     @api.post("/upload")
     async def upload_file(file: UploadFile = FastAPIFile(...)):
         """Accept .xlsx/.xls/.csv upload; return server-side path."""
+        # Ensure upload dir exists (may have been cleaned by a previous server)
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
         ext = os.path.splitext(file.filename or "")[1].lower()
         if ext not in (".xlsx", ".xls", ".csv"):
             return JSONResponse(
@@ -347,6 +427,152 @@ def _make_app():
         with open(dest, "wb") as f:
             f.write(contents)
         return {"ok": True, "path": dest, "filename": file.filename}
+
+    # ── Sheet list (for Excel files) ─────────────────────────────
+    class SheetListRequest(BaseModel):
+        excel_path: str
+
+    @api.post("/sheet-list")
+    def sheet_list(req: SheetListRequest):
+        """Return list of sheet names in an Excel file."""
+        try:
+            path_err = _validate_data_path(req.excel_path)
+            if path_err:
+                return JSONResponse(
+                    {"ok": False, "error": path_err}, status_code=400
+                )
+            if req.excel_path.endswith(".csv"):
+                return {"ok": True, "sheets": ["Sheet1"]}
+            import openpyxl
+            wb = openpyxl.load_workbook(req.excel_path, read_only=True)
+            sheets = wb.sheetnames
+            wb.close()
+            return {"ok": True, "sheets": sheets}
+        except Exception as exc:
+            return JSONResponse(
+                {"ok": False, "error": str(exc)}, status_code=400
+            )
+
+    # ── Validate table data ──────────────────────────────────────
+    class ValidateTableRequest(BaseModel):
+        excel_path: str
+        table_type: str
+        sheet: int | str = 0
+
+    @api.post("/validate-table")
+    def validate_table(req: ValidateTableRequest):
+        """Validate that data matches the expected table type layout."""
+        try:
+            path_err = _validate_data_path(req.excel_path)
+            if path_err:
+                return JSONResponse(
+                    {"ok": False, "error": path_err}, status_code=400
+                )
+            import pandas as pd
+            from refraction.core.validators import (
+                validate_bar, validate_line, validate_grouped_bar,
+                validate_kaplan_meier, validate_heatmap,
+                validate_two_way_anova, validate_contingency,
+                validate_bland_altman, validate_forest_plot,
+            )
+
+            if req.excel_path.endswith(".csv"):
+                df = pd.read_csv(req.excel_path, header=None)
+            else:
+                df = pd.read_excel(req.excel_path, sheet_name=req.sheet, header=None)
+
+            # Map table_type to validator
+            validator_map = {
+                "column": validate_bar,
+                "xy": validate_line,
+                "grouped": validate_grouped_bar,
+                "survival": validate_kaplan_meier,
+                "contingency": validate_contingency,
+                "multiple_variables": validate_heatmap,
+                "two_way": validate_two_way_anova,
+                "comparison": validate_bland_altman,
+                "meta": validate_forest_plot,
+            }
+
+            validator = validator_map.get(req.table_type)
+            if validator is None:
+                # No specific validator — accept if it has numeric data
+                return {
+                    "ok": True,
+                    "valid": True,
+                    "errors": [],
+                    "warnings": ["No specific validator for table type: " + req.table_type],
+                    "shape": [len(df), len(df.columns)],
+                }
+
+            errors, warnings = validator(df)
+            return {
+                "ok": True,
+                "valid": len(errors) == 0,
+                "errors": errors,
+                "warnings": warnings,
+                "shape": [len(df), len(df.columns)],
+            }
+        except Exception as exc:
+            return JSONResponse(
+                {"ok": False, "error": str(exc)}, status_code=400
+            )
+
+    # ── LaTeX rendering ─────────────────────────────────────────
+    _latex_cache: dict[str, bytes] = {}
+
+    class LatexRequest(BaseModel):
+        latex: str
+        dpi: int = 150
+        fontsize: int = 14
+
+    @api.post("/render-latex")
+    def render_latex(req: LatexRequest):
+        """Render a LaTeX formula to PNG using matplotlib's mathtext."""
+        import base64
+        import hashlib
+        import io
+
+        cache_key = f"{req.latex}_{req.dpi}_{req.fontsize}"
+        if cache_key in _latex_cache:
+            return {"ok": True, "png_base64": base64.b64encode(_latex_cache[cache_key]).decode()}
+
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            from matplotlib import mathtext
+
+            fig, ax = plt.subplots(figsize=(0.01, 0.01))
+            ax.axis("off")
+            fig.patch.set_alpha(0)
+
+            # Render the LaTeX text
+            text = ax.text(
+                0, 0, f"${req.latex}$",
+                fontsize=req.fontsize,
+                verticalalignment="baseline",
+                transform=ax.transAxes,
+            )
+
+            # Fit figure to text
+            fig.canvas.draw()
+            bbox = text.get_window_extent(fig.canvas.get_renderer())
+            bbox = bbox.transformed(fig.dpi_scale_trans.inverted())
+            fig.set_size_inches(bbox.width + 0.1, bbox.height + 0.1)
+
+            buf = io.BytesIO()
+            fig.savefig(buf, format="png", dpi=req.dpi, transparent=True,
+                       bbox_inches="tight", pad_inches=0.05)
+            plt.close(fig)
+
+            png_bytes = buf.getvalue()
+            _latex_cache[cache_key] = png_bytes
+
+            return {"ok": True, "png_base64": base64.b64encode(png_bytes).decode()}
+        except Exception as exc:
+            _log.exception("LaTeX render failed")
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
 
     # ── Data preview ──────────────────────────────────────────────
     class DataPreviewRequest(BaseModel):
@@ -889,9 +1115,11 @@ def _make_app():
 
     @api.post("/project/load")
     async def project_load(file: UploadFile = FastAPIFile(...)):
-        """Upload and load a .refract project file."""
+        """Upload and load a .refract project file (format v2 or v3)."""
+        import json as _json
+        import zipfile as _zipfile
+
         try:
-            from refraction.io.project_v2 import load_project
             ext = os.path.splitext(file.filename or "")[1].lower()
             if ext not in (".refract",):
                 return JSONResponse(
@@ -902,12 +1130,69 @@ def _make_app():
             dest = os.path.join(UPLOAD_DIR, f"{uuid.uuid4().hex}.refract")
             with open(dest, "wb") as f:
                 f.write(contents)
-            result = load_project(dest)
-            # Don't return temp_dir in API response
-            result.pop("temp_dir", None)
+
+            # Detect format version
+            with _zipfile.ZipFile(dest, "r") as zf:
+                names = zf.namelist()
+                if "manifest.json" in names:
+                    manifest = _json.loads(zf.read("manifest.json").decode())
+                    fmt_version = manifest.get("format_version", 0)
+                else:
+                    fmt_version = 2
+
+            if fmt_version >= 3:
+                result = _load_refract_v3(dest)
+            else:
+                from refraction.io.project_v2 import load_project
+                result = load_project(dest)
+                result.pop("temp_dir", None)
+
             return {"ok": True, "project": result}
         except Exception as e:
             _log.exception("project load failed")
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+    def _load_refract_v3(archive_path: str) -> dict:
+        """Load a format-v3 .refract archive (dataTables-based).
+
+        Extracts embedded CSV data to UPLOAD_DIR so the engine can
+        access it, then restores dataFilePath pointers in the project.
+        """
+        import json as _json
+        import zipfile as _zipfile
+
+        with _zipfile.ZipFile(archive_path, "r") as zf:
+            names = zf.namelist()
+            project = _json.loads(zf.read("project.json").decode())
+
+            # Extract embedded data files and restore dataFilePath
+            for table in project.get("dataTables", []):
+                data_ref = table.pop("dataRef", "") or ""
+                if data_ref and data_ref in names:
+                    ext = os.path.splitext(data_ref)[1] or ".csv"
+                    dest_name = f"{uuid.uuid4().hex}{ext}"
+                    dest_path = os.path.join(UPLOAD_DIR, dest_name)
+                    with zf.open(data_ref) as src, open(dest_path, "wb") as dst:
+                        dst.write(src.read())
+                    table["dataFilePath"] = dest_path
+                else:
+                    table["dataFilePath"] = ""
+
+                # Restore chart configs from charts/ entries if not inline
+                for sheet in table.get("sheets", []):
+                    if sheet.get("kind") == "graph" and "chartConfig" not in sheet:
+                        for chart_file in names:
+                            if chart_file.startswith("charts/") and chart_file.endswith(".json"):
+                                try:
+                                    chart_data = _json.loads(zf.read(chart_file).decode())
+                                    if chart_data.get("chartType") == sheet.get("chartType"):
+                                        sheet["chartConfig"] = chart_data.get("chartConfig")
+                                        sheet["formatSettings"] = chart_data.get("formatSettings")
+                                        sheet["formatAxesSettings"] = chart_data.get("formatAxesSettings")
+                                        break
+                                except Exception:
+                                    pass
+
+        return project
 
     return api

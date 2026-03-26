@@ -53,6 +53,12 @@ def build_stats_brackets(
 
     test = stats_test.lower().replace("-", "").replace("_", "").replace(" ", "")
 
+    # Map high-level test types to specific tests
+    if test == "parametric":
+        test = "ttest" if len(group_names) == 2 else "anova"
+    elif test == "nonparametric":
+        test = "mannwhitney" if len(group_names) == 2 else "kruskalwallis"
+
     if test in ("ttest", "unpairedttest", "studentttest"):
         # Pairwise t-tests between all pairs
         order = 0

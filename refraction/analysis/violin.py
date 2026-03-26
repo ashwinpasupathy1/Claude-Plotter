@@ -69,7 +69,8 @@ def analyze_violin(kw: dict) -> ChartSpec:
     colors = resolve_colors(cfg["color"], len(groups))
 
     stats_list = []
-    for g in groups:
+    group_data = []
+    for i, g in enumerate(groups):
         vals = values[g]
         if len(vals) >= 2:
             stats_list.append(_violin_stats(vals))
@@ -78,6 +79,19 @@ def analyze_violin(kw: dict) -> ChartSpec:
                 "q1": 0.0, "median": 0.0, "q3": 0.0,
                 "kde_x": [], "kde_y": [],
             })
+        m = float(np.mean(vals)) if vals else 0.0
+        med = float(np.median(vals)) if vals else 0.0
+        sd = float(np.std(vals, ddof=1)) if len(vals) > 1 else 0.0
+        group_data.append({
+            "name": g,
+            "values": vals,
+            "mean": m,
+            "median": med,
+            "sd": sd,
+            "sem": sd / len(vals) ** 0.5 if vals else 0.0,
+            "n": len(vals),
+            "color": colors[i],
+        })
 
     # Optional raw points
     raw_points = None
@@ -111,7 +125,7 @@ def analyze_violin(kw: dict) -> ChartSpec:
             gridlines=cfg["gridlines"],
         ),
         data={
-            "groups": groups,
+            "groups": group_data,
             "violin_stats": stats_list,
             "raw_points": raw_points,
             "results": results,

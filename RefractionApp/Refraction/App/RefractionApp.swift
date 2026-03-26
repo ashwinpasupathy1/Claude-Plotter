@@ -42,10 +42,41 @@ struct RefractionApp: App {
                 )
         }
         .windowStyle(.titleBar)
+        .windowToolbarStyle(.unified(showsTitle: true))
         .defaultSize(width: 1200, height: 800)
         .commands {
-            // File > Save (Cmd+S)
-            CommandGroup(after: .newItem) {
+            // File menu: New, Open, Save, Save As
+            CommandGroup(replacing: .newItem) {
+                Button("New Project") {
+                    appState.newProject()
+                }
+                .keyboardShortcut("n", modifiers: .command)
+
+                Button("Open...") {
+                    Task { await appState.openProjectFile() }
+                }
+                .keyboardShortcut("o", modifiers: .command)
+
+                Menu("Open Recent") {
+                    if RecentFiles.shared.paths.isEmpty {
+                        Text("No Recent Files")
+                    } else {
+                        ForEach(RecentFiles.shared.paths, id: \.self) { url in
+                            Button(url.lastPathComponent) {
+                                Task { await appState.loadProjectFromURL(url) }
+                            }
+                        }
+
+                        Divider()
+
+                        Button("Clear List") {
+                            RecentFiles.shared.clear()
+                        }
+                    }
+                }
+
+                Divider()
+
                 Button("Save") {
                     Task { await appState.saveProjectFile() }
                 }

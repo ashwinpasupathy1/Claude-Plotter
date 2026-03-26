@@ -1,92 +1,49 @@
 // ToolbarBanner.swift — Prism-style toolbar ribbon at the top of the window.
-// Placeholder buttons organized by category. Not functional yet.
+// Organized to match GraphPad Prism's ribbon layout.
+// Active buttons are colored; unimplemented ones are grayed out.
 
 import SwiftUI
+import UniformTypeIdentifiers
+import RefractionRenderer
 
 struct ToolbarBanner: View {
 
     @Environment(AppState.self) private var appState
 
+    // Dialog state
+    @State private var showNewDataTableDialog = false
+    @State private var showNewGraphDialog = false
+    @State private var showAnalyzeDialog = false
+    @State private var showDeleteConfirm = false
+    @State private var showExportDialog = false
+    @State private var showStatsWiki = false
+    @State private var showArchitectureGuide = false
+    @State private var showFormatGraph = false
+    @State private var showFormatAxes = false
+
     var body: some View {
         HStack(spacing: 0) {
-            toolbarGroup("File", items: [
-                ("doc.badge.plus", "New"),
-                ("folder", "Open"),
-                ("square.and.arrow.down", "Save"),
-                ("printer", "Print"),
-            ])
-
+            fileGroup
             divider
-
-            toolbarGroup("Sheet", items: [
-                ("tablecells.badge.ellipsis", "New Table"),
-                ("trash", "Delete"),
-                ("plus", "Add"),
-                ("chart.bar.fill", "Graph"),
-            ])
-
+            sheetGroup
             divider
-
-            toolbarGroup("Undo", items: [
-                ("arrow.uturn.backward", "Undo"),
-                ("arrow.uturn.forward", "Redo"),
-            ])
-
+            undoGroup
             divider
-
-            toolbarGroup("Clipboard", items: [
-                ("scissors", "Cut"),
-                ("doc.on.doc", "Copy"),
-                ("doc.on.clipboard", "Paste"),
-            ])
-
+            clipboardGroup
             divider
-
-            toolbarGroup("Analysis", items: [
-                ("function", "Analyze"),
-            ])
-
+            analysisGroup
             divider
-
-            toolbarGroup("Change", items: [
-                ("arrow.triangle.2.circlepath", "Swap"),
-                ("slider.horizontal.3", "Transform"),
-            ])
-
+            formatGroup
             divider
-
-            toolbarGroup("Arrange", items: [
-                ("rectangle.grid.2x2", "Align"),
-                ("arrow.up.and.down.and.arrow.left.and.right", "Distribute"),
-            ])
-
-            divider
-
-            toolbarGroup("Draw", items: [
-                ("pencil", "Draw"),
-                ("line.diagonal", "Line"),
-                ("rectangle", "Rectangle"),
-            ])
-
-            divider
-
-            toolbarGroup("Write", items: [
-                ("textformat", "Text"),
-                ("bold", "Bold"),
-                ("italic", "Italic"),
-            ])
+            insertGroup
 
             Spacer()
 
-            toolbarGroup("Export", items: [
-                ("square.and.arrow.up", "Export"),
-            ])
-
+            viewGroup
             divider
-
-            toolbarGroup("Help", items: [
-                ("questionmark.circle", "Help"),
-            ])
+            statsGroup
+            divider
+            exportGroup
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 2)
@@ -94,36 +51,315 @@ struct ToolbarBanner: View {
         .overlay(alignment: .bottom) {
             Divider()
         }
+        // Dialogs
+        .sheet(isPresented: $showNewDataTableDialog) {
+            NewDataTableDialog()
+                .environment(appState)
+        }
+        .sheet(isPresented: $showNewGraphDialog) {
+            NewGraphDialog()
+                .environment(appState)
+        }
+        .sheet(isPresented: $showAnalyzeDialog) {
+            AnalyzeDataDialog()
+                .environment(appState)
+        }
+        .sheet(isPresented: $showStatsWiki) {
+            StatsWikiDialog()
+                .environment(appState)
+        }
+        .sheet(isPresented: $showArchitectureGuide) {
+            ArchitectureGuideDialog()
+        }
+        .sheet(isPresented: $showExportDialog) {
+            if let graph = appState.activeGraph, let spec = graph.chartSpec {
+                ExportChartDialog(spec: spec, graphLabel: graph.label)
+            }
+        }
+        .sheet(isPresented: $showFormatGraph) {
+            if let graph = appState.activeGraph {
+                FormatGraphDialog(settings: graph.formatSettings)
+            }
+        }
+        .sheet(isPresented: $showFormatAxes) {
+            if let graph = appState.activeGraph {
+                FormatAxesDialog(settings: graph.formatAxesSettings)
+            }
+        }
+        .alert("Delete Selected Item?", isPresented: $showDeleteConfirm) {
+            Button("Delete", role: .destructive) {
+                deleteSelectedItem()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This action cannot be undone.")
+        }
     }
 
-    // MARK: - Toolbar group
+    // MARK: - File Group
 
-    private func toolbarGroup(_ title: String, items: [(icon: String, label: String)]) -> some View {
+    private var fileGroup: some View {
         VStack(spacing: 1) {
             HStack(spacing: 6) {
-                ForEach(items, id: \.icon) { item in
-                    Button {
-                        // Placeholder — not functional yet
-                    } label: {
-                        VStack(spacing: 1) {
-                            Image(systemName: item.icon)
-                                .font(.system(size: 14))
-                                .frame(width: 20, height: 18)
-                            Text(item.label)
-                                .font(.system(size: 8))
-                                .lineLimit(1)
-                        }
-                        .frame(minWidth: 32)
+                activeButton(icon: "doc.badge.plus", label: "New", color: .blue) {
+                    appState.newProject()
+                }
+                Menu {
+                    Button("Open File...") {
+                        Task { await appState.openProjectFile() }
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+
+                    Divider()
+
+                    if RecentFiles.shared.paths.isEmpty {
+                        Text("No Recent Files")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(RecentFiles.shared.paths, id: \.self) { url in
+                            Button(url.lastPathComponent) {
+                                Task { await appState.loadProjectFromURL(url) }
+                            }
+                        }
+
+                        Divider()
+
+                        Button("Clear List") {
+                            RecentFiles.shared.clear()
+                        }
+                    }
+                } label: {
+                    VStack(spacing: 1) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 14))
+                            .frame(width: 20, height: 18)
+                        Text("Open")
+                            .font(.system(size: 8))
+                            .lineLimit(1)
+                    }
+                    .frame(minWidth: 32)
+                }
+                .menuStyle(.borderlessButton)
+                .foregroundStyle(.orange)
+                activeButton(icon: "square.and.arrow.down", label: "Save", color: .green) {
+                    Task { await appState.saveProjectFile() }
                 }
             }
-            Text(title)
-                .font(.system(size: 8, weight: .medium))
-                .foregroundStyle(.tertiary)
+            groupLabel("File")
         }
         .padding(.horizontal, 4)
+    }
+
+    // MARK: - Sheet Group
+
+    private var sheetGroup: some View {
+        let hasExperiment = appState.activeExperiment != nil
+        let hasData = appState.activeExperiment?.hasData ?? false
+        let hasSelection = appState.activeItemID != nil
+
+        return VStack(spacing: 1) {
+            HStack(spacing: 6) {
+                activeButton(icon: "tablecells.badge.ellipsis", label: "Table", color: hasExperiment ? .teal : .gray) {
+                    guard appState.activeExperiment != nil else { return }
+                    showNewDataTableDialog = true
+                }
+                activeButton(icon: "chart.bar.fill", label: "Graph", color: hasData ? .indigo : .gray) {
+                    guard appState.activeExperiment?.hasData == true else { return }
+                    showNewGraphDialog = true
+                }
+                activeButton(icon: "trash", label: "Delete", color: hasSelection ? .red : .gray) {
+                    guard appState.activeItemID != nil else { return }
+                    showDeleteConfirm = true
+                }
+            }
+            groupLabel("Sheet")
+        }
+        .padding(.horizontal, 4)
+    }
+
+    // MARK: - Undo Group
+
+    private var undoGroup: some View {
+        VStack(spacing: 1) {
+            HStack(spacing: 6) {
+                activeButton(icon: "arrow.uturn.backward", label: "Undo",
+                             color: appState.canUndo ? .blue : .gray) {
+                    appState.undoManager.undo()
+                    DebugLog.shared.logAppEvent("undo()")
+                }
+                activeButton(icon: "arrow.uturn.forward", label: "Redo",
+                             color: appState.canRedo ? .blue : .gray) {
+                    appState.undoManager.redo()
+                    DebugLog.shared.logAppEvent("redo()")
+                }
+            }
+            groupLabel("Undo")
+        }
+        .padding(.horizontal, 4)
+    }
+
+    // MARK: - Clipboard Group
+
+    private var clipboardGroup: some View {
+        let hasChart = appState.activeGraph?.chartSpec != nil
+
+        return VStack(spacing: 1) {
+            HStack(spacing: 6) {
+                activeButton(icon: "doc.on.doc", label: "Copy", color: hasChart ? .mint : .gray) {
+                    copyChartToClipboard()
+                }
+            }
+            groupLabel("Clipboard")
+        }
+        .padding(.horizontal, 4)
+    }
+
+    // MARK: - Analysis Group
+
+    private var analysisGroup: some View {
+        let hasData = appState.activeExperiment?.hasData ?? false
+
+        return VStack(spacing: 1) {
+            HStack(spacing: 6) {
+                activeButton(icon: "function", label: "Analyze", color: hasData ? .purple : .gray) {
+                    guard appState.activeExperiment?.hasData == true else { return }
+                    showAnalyzeDialog = true
+                }
+            }
+            groupLabel("Analysis")
+        }
+        .padding(.horizontal, 4)
+    }
+
+    // MARK: - Format Group (NEW)
+
+    private var formatGroup: some View {
+        let hasGraph = appState.activeGraph != nil
+
+        return VStack(spacing: 1) {
+            HStack(spacing: 6) {
+                activeButton(icon: "paintbrush", label: "Format", color: hasGraph ? .orange : .gray) {
+                    guard appState.activeGraph != nil else { return }
+                    showFormatGraph = true
+                }
+                activeButton(icon: "ruler", label: "Axes", color: hasGraph ? .brown : .gray) {
+                    guard appState.activeGraph != nil else { return }
+                    showFormatAxes = true
+                }
+                activeButton(icon: "paintpalette", label: "Style", color: hasGraph ? .yellow : .gray) {
+                    // Cycle render style on click
+                    guard let graph = appState.activeGraph else { return }
+                    let styles = RenderStyle.allCases
+                    if let idx = styles.firstIndex(of: graph.renderStyle) {
+                        let next = styles[(idx + 1) % styles.count]
+                        graph.applyRenderStyle(next)
+                        DebugLog.shared.logAppEvent("cycleRenderStyle(\(next.rawValue))")
+                    }
+                }
+            }
+            groupLabel("Format")
+        }
+        .padding(.horizontal, 4)
+    }
+
+    // MARK: - Insert Group (NEW — annotations)
+
+    private var insertGroup: some View {
+        let hasGraph = appState.activeGraph?.chartSpec != nil
+
+        return VStack(spacing: 1) {
+            HStack(spacing: 6) {
+                disabledButton(icon: "textformat", label: "Text")
+                disabledButton(icon: "line.diagonal", label: "Line")
+                disabledButton(icon: "bracket", label: "Bracket")
+            }
+            groupLabel("Insert")
+        }
+        .padding(.horizontal, 4)
+    }
+
+    // MARK: - View Group (NEW — zoom)
+
+    private var viewGroup: some View {
+        VStack(spacing: 1) {
+            HStack(spacing: 6) {
+                disabledButton(icon: "plus.magnifyingglass", label: "Zoom In")
+                disabledButton(icon: "minus.magnifyingglass", label: "Zoom Out")
+                disabledButton(icon: "arrow.up.left.and.arrow.down.right", label: "Fit")
+            }
+            groupLabel("View")
+        }
+        .padding(.horizontal, 4)
+    }
+
+    // MARK: - Stats Group
+
+    private var statsGroup: some View {
+        VStack(spacing: 1) {
+            HStack(spacing: 6) {
+                activeButton(icon: "book.fill", label: "Wiki", color: .cyan) {
+                    showStatsWiki = true
+                }
+                activeButton(icon: "text.book.closed", label: "Guide", color: .indigo) {
+                    showArchitectureGuide = true
+                }
+            }
+            groupLabel("Reference")
+        }
+        .padding(.horizontal, 4)
+    }
+
+    // MARK: - Export Group
+
+    private var exportGroup: some View {
+        let hasChart = appState.activeGraph?.chartSpec != nil
+
+        return VStack(spacing: 1) {
+            HStack(spacing: 6) {
+                activeButton(icon: "square.and.arrow.up", label: "Export", color: hasChart ? .pink : .gray) {
+                    guard appState.activeGraph?.chartSpec != nil else { return }
+                    showExportDialog = true
+                }
+            }
+            groupLabel("Export")
+        }
+        .padding(.horizontal, 4)
+    }
+
+    // MARK: - Button Builders
+
+    private func activeButton(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 1) {
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                    .frame(width: 20, height: 18)
+                Text(label)
+                    .font(.system(size: 8))
+                    .lineLimit(1)
+            }
+            .frame(minWidth: 32)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(color)
+    }
+
+    private func disabledButton(icon: String, label: String) -> some View {
+        VStack(spacing: 1) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .frame(width: 20, height: 18)
+            Text(label)
+                .font(.system(size: 8))
+                .lineLimit(1)
+        }
+        .frame(minWidth: 32)
+        .foregroundStyle(.quaternary)
+    }
+
+    private func groupLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 8, weight: .medium))
+            .foregroundStyle(.tertiary)
     }
 
     private var divider: some View {
@@ -131,5 +367,37 @@ struct ToolbarBanner: View {
             .fill(Color.gray.opacity(0.2))
             .frame(width: 1, height: 40)
             .padding(.horizontal, 2)
+    }
+
+    // MARK: - Actions
+
+    private func deleteSelectedItem() {
+        guard let kind = appState.activeItemKind,
+              let id = appState.activeItemID else { return }
+        switch kind {
+        case .dataTable:
+            appState.removeDataTable(id: id)
+        case .graph:
+            appState.removeGraph(id: id)
+        case .analysis:
+            appState.removeAnalysis(id: id)
+        }
+    }
+
+    private func copyChartToClipboard() {
+        guard let graph = appState.activeGraph,
+              let spec = graph.chartSpec else { return }
+
+        let renderer = ImageRenderer(content:
+            ChartCanvasView(spec: spec)
+                .frame(width: 800, height: 600)
+        )
+        renderer.scale = 2.0
+
+        guard let image = renderer.nsImage else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([image])
+
+        DebugLog.shared.logAppEvent("copyChartToClipboard()", detail: "Copied \(graph.label) as image")
     }
 }

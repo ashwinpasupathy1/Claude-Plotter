@@ -8,9 +8,8 @@ struct AxesTabView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        if let sheet = appState.activeSheet, sheet.kind == .graph,
-           let config = sheet.chartConfig {
-            @Bindable var config = config
+        if let graph = appState.activeGraph {
+            @Bindable var config = graph.chartConfig
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
 
@@ -108,7 +107,7 @@ struct AxesTabView: View {
                 .padding()
             }
         } else {
-            Text("Select a graph sheet")
+            Text("Select a graph")
                 .foregroundStyle(.secondary)
         }
     }

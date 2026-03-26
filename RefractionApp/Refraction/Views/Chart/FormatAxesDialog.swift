@@ -10,6 +10,9 @@ struct FormatAxesDialog: View {
 
     @State private var selectedTab: Tab = .frameAndOrigin
 
+    // Snapshot for cancel — restored if user clicks Cancel
+    @State private var snapshot: Data?
+
     enum Tab: String, CaseIterable {
         case frameAndOrigin = "Frame & Origin"
         case xAxis = "X Axis"
@@ -58,15 +61,66 @@ struct FormatAxesDialog: View {
             // Bottom buttons
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button("OK") { dismiss() }
+                Button("Cancel") {
+                    restoreSnapshot()
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+                Button("Done") { dismiss() }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
             }
             .padding(12)
         }
         .frame(width: 560)
+        .onAppear { takeSnapshot() }
+    }
+
+    // MARK: - Snapshot / Restore
+
+    private func takeSnapshot() {
+        snapshot = try? JSONEncoder().encode(settings)
+    }
+
+    private func restoreSnapshot() {
+        guard let data = snapshot,
+              let restored = try? JSONDecoder().decode(FormatAxesSettings.self, from: data) else { return }
+        settings.originMode = restored.originMode
+        settings.yIntersectsXAt = restored.yIntersectsXAt
+        settings.xIntersectsYAt = restored.xIntersectsYAt
+        settings.chartWidth = restored.chartWidth
+        settings.chartHeight = restored.chartHeight
+        settings.axisThickness = restored.axisThickness
+        settings.axisColor = restored.axisColor
+        settings.plotAreaColor = restored.plotAreaColor
+        settings.pageBackground = restored.pageBackground
+        settings.frameStyle = restored.frameStyle
+        settings.hideAxes = restored.hideAxes
+        settings.majorGrid = restored.majorGrid
+        settings.majorGridColor = restored.majorGridColor
+        settings.majorGridThickness = restored.majorGridThickness
+        settings.minorGrid = restored.minorGrid
+        settings.minorGridColor = restored.minorGridColor
+        settings.minorGridThickness = restored.minorGridThickness
+        settings.xAxisTitle = restored.xAxisTitle
+        settings.xAxisTitleFontSize = restored.xAxisTitleFontSize
+        settings.xAxisTickDirection = restored.xAxisTickDirection
+        settings.xAxisTickLength = restored.xAxisTickLength
+        settings.xAxisLabelFontSize = restored.xAxisLabelFontSize
+        settings.xAxisLabelRotation = restored.xAxisLabelRotation
+        settings.yAxisTitle = restored.yAxisTitle
+        settings.yAxisTitleFontSize = restored.yAxisTitleFontSize
+        settings.yAxisTickDirection = restored.yAxisTickDirection
+        settings.yAxisTickLength = restored.yAxisTickLength
+        settings.yAxisLabelFontSize = restored.yAxisLabelFontSize
+        settings.yAxisAutoRange = restored.yAxisAutoRange
+        settings.yAxisMin = restored.yAxisMin
+        settings.yAxisMax = restored.yAxisMax
+        settings.yAxisTickInterval = restored.yAxisTickInterval
+        settings.yAxisScale = restored.yAxisScale
+        settings.chartTitle = restored.chartTitle
+        settings.chartTitleFontSize = restored.chartTitleFontSize
+        settings.globalFontName = restored.globalFontName
     }
 
     // MARK: - Frame & Origin Tab

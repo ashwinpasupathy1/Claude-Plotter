@@ -52,23 +52,6 @@ enum TableType: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Sample data filename (in SampleData bundle resource).
-    var sampleDataFilename: String {
-        switch self {
-        case .xy:                 return "time_series"
-        case .column:             return "drug_treatment"
-        case .grouped:            return "grouped_data"
-        case .contingency:        return "contingency_data"
-        case .survival:           return "survival_data"
-        case .parts:              return "waterfall_data"
-        case .multipleVariables:  return "multiple_variables_data"
-        case .nested:             return "nested_data"
-        case .twoWay:             return "two_way_anova_data"
-        case .comparison:         return "comparison_data"
-        case .meta:               return "forest_data"
-        }
-    }
-
     /// Default chart type to show when creating a new graph for this table.
     var defaultChartType: ChartType {
         validChartTypes.first!

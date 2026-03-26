@@ -144,8 +144,84 @@ struct StatsTestDetailDialog: View {
     }
 
     private func formulaText(_ text: String) -> some View {
-        Text(text)
-            .font(.system(.callout, design: .monospaced))
-            .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 8) {
+            // Lines prefixed with $ are LaTeX formulas.
+            // Lines prefixed with # are explanatory italic text.
+            // Everything else is monospaced plain text.
+            ForEach(Array(text.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if !trimmed.isEmpty {
+                    if trimmed.hasPrefix("$") && trimmed.hasSuffix("$") && trimmed.count > 2 {
+                        // Explicit LaTeX: $...$
+                        let latex = String(trimmed.dropFirst().dropLast())
+                        LaTeXView(latex, fontSize: 14)
+                            .frame(height: 28)
+                    } else if trimmed.hasPrefix("#") {
+                        // Explanatory text in italic
+                        Text(String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces))
+                            .font(.callout)
+                            .italic()
+                            .foregroundStyle(.secondary)
+                    } else if containsMathSymbols(trimmed) {
+                        // Auto-detect lines with Unicode math and render as LaTeX
+                        LaTeXView(unicodeToLatex(trimmed), fontSize: 14)
+                            .frame(height: 28)
+                    } else {
+                        Text(trimmed)
+                            .font(.system(.callout, design: .monospaced))
+                    }
+                }
+            }
+        }
+    }
+
+    /// Does this line contain Unicode math symbols that should be rendered as LaTeX?
+    private func containsMathSymbols(_ line: String) -> Bool {
+        let mathChars: [Character] = [
+            "\u{03B1}", "\u{03B2}", "\u{03BC}", "\u{03C3}", "\u{03C7}",  // α β μ σ χ
+            "\u{2211}", "\u{220F}", "\u{221A}",                           // Σ Π √
+            "\u{2260}", "\u{2264}", "\u{2265}",                           // ≠ ≤ ≥
+        ]
+        // Must contain at least one math character
+        return line.contains(where: { mathChars.contains($0) }) ||
+               line.contains("x\u{0305}") ||  // x̄
+               line.contains("R\u{0305}")      // R̄
+    }
+
+    /// Convert Unicode math notation to LaTeX.
+    private func unicodeToLatex(_ text: String) -> String {
+        var s = text
+        // Greek letters
+        s = s.replacingOccurrences(of: "\u{03B1}", with: "\\alpha ")
+        s = s.replacingOccurrences(of: "\u{03B2}", with: "\\beta ")
+        s = s.replacingOccurrences(of: "\u{03BC}", with: "\\mu ")
+        s = s.replacingOccurrences(of: "\u{03C3}", with: "\\sigma ")
+        s = s.replacingOccurrences(of: "\u{03C7}", with: "\\chi ")
+        // Subscripts
+        s = s.replacingOccurrences(of: "\u{2080}", with: "_0")
+        s = s.replacingOccurrences(of: "\u{2081}", with: "_1")
+        s = s.replacingOccurrences(of: "\u{2082}", with: "_2")
+        s = s.replacingOccurrences(of: "\u{2083}", with: "_3")
+        s = s.replacingOccurrences(of: "\u{1D62}", with: "_i")  // ᵢ
+        // Superscripts
+        s = s.replacingOccurrences(of: "\u{00B2}", with: "^2")
+        // Operators
+        s = s.replacingOccurrences(of: "\u{221A}", with: "\\sqrt")
+        s = s.replacingOccurrences(of: "\u{2212}", with: "-")
+        s = s.replacingOccurrences(of: "\u{2260}", with: "\\neq ")
+        s = s.replacingOccurrences(of: "\u{2264}", with: "\\leq ")
+        s = s.replacingOccurrences(of: "\u{2265}", with: "\\geq ")
+        s = s.replacingOccurrences(of: "\u{2211}", with: "\\sum ")
+        s = s.replacingOccurrences(of: "\u{220F}", with: "\\prod ")
+        // Bars (x̄, R̄)
+        s = s.replacingOccurrences(of: "x\u{0305}", with: "\\bar{x}")
+        s = s.replacingOccurrences(of: "R\u{0305}", with: "\\bar{R}")
+        // Dashes
+        s = s.replacingOccurrences(of: "\u{2014}", with: "---")
+        s = s.replacingOccurrences(of: "\u{2013}", with: "--")
+        // H₀ / H₁ formatting
+        s = s.replacingOccurrences(of: "H_0:", with: "H_0:\\;")
+        s = s.replacingOccurrences(of: "H_1:", with: "H_1:\\;")
+        return s
     }
 }
