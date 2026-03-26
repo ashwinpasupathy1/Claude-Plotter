@@ -132,8 +132,11 @@ private struct StylePreviewCard: View {
         case .matplotlib: filename = "style_matplotlib"
         }
 
-        // Try loading from the StylePreviews folder in the bundle
+        // Try loading from the bundle — may be in StylePreviews subfolder or at root of Resources
         if let url = Bundle.main.url(forResource: filename, withExtension: "png", subdirectory: "StylePreviews") {
+            return NSImage(contentsOf: url)
+        }
+        if let url = Bundle.main.url(forResource: filename, withExtension: "png") {
             return NSImage(contentsOf: url)
         }
         return nil

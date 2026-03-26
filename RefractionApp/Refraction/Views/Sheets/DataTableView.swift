@@ -199,7 +199,13 @@ private struct CellEditor: View {
         } else {
             newValue = .text(trimmed)
         }
+        let oldValue = table.cell(row: row, col: col)
+        guard oldValue != newValue else {
+            isEditing = false
+            return
+        }
         table.setCell(row: row, col: col, value: newValue)
+        appState.registerCellEdit(table: table, row: row, col: col, oldValue: oldValue, newValue: newValue)
         appState.markDirty()
         isEditing = false
         DebugLog.shared.logVerbose("cell edit [\(row),\(col)] = \(trimmed)")

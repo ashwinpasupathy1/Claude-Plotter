@@ -59,6 +59,33 @@ final class AppState {
         canRedo = undoManager.canRedo
     }
 
+    /// Register undo for a single cell edit in a data table.
+    func registerCellEdit(table: DataTable, row: Int, col: Int, oldValue: CellValue, newValue: CellValue) {
+        undoManager.registerUndo(withTarget: self) { target in
+            table.setCell(row: row, col: col, value: oldValue)
+            target.markDirty()
+            // Register redo: set newValue again
+            target.undoManager.registerUndo(withTarget: target) { t in
+                table.setCell(row: row, col: col, value: newValue)
+                t.markDirty()
+                // Re-register undo for further undo/redo cycles
+                t.registerCellEdit(table: table, row: row, col: col, oldValue: oldValue, newValue: newValue)
+            }
+            target.undoManager.setActionName("Edit Cell")
+        }
+        undoManager.setActionName("Edit Cell")
+    }
+
+    /// Find a graph by ID across all experiments.
+    func findGraph(id: UUID) -> Graph? {
+        for exp in experiments {
+            if let g = exp.graphs.first(where: { $0.id == id }) {
+                return g
+            }
+        }
+        return nil
+    }
+
     // MARK: - Experiment state
 
     /// All experiments in the project.
@@ -197,6 +224,9 @@ final class AppState {
     func removeExperiment(id: UUID) {
         guard let index = experiments.firstIndex(where: { $0.id == id }) else { return }
         let removed = experiments[index]
+        let prevActiveExpID = activeExperimentID
+        let prevActiveItemID = activeItemID
+        let prevActiveItemKind = activeItemKind
         experiments.remove(at: index)
         markDirty()
         if activeExperimentID == id {
@@ -208,8 +238,15 @@ final class AppState {
         // Register undo: re-insert the experiment
         undoManager.registerUndo(withTarget: self) { target in
             target.experiments.insert(removed, at: min(index, target.experiments.count))
-            target.activeExperimentID = removed.id
+            target.activeExperimentID = prevActiveExpID
+            target.activeItemID = prevActiveItemID
+            target.activeItemKind = prevActiveItemKind
             target.markDirty()
+            // Register redo: remove again
+            target.undoManager.registerUndo(withTarget: target) { t in
+                t.removeExperiment(id: id)
+            }
+            target.undoManager.setActionName("Remove Experiment")
         }
         undoManager.setActionName("Remove Experiment")
     }
@@ -266,6 +303,8 @@ final class AppState {
         guard let experiment = activeExperiment,
               let index = experiment.dataTables.firstIndex(where: { $0.id == id }) else { return }
         let removed = experiment.dataTables[index]
+        let prevItemID = activeItemID
+        let prevItemKind = activeItemKind
         experiment.removeDataTable(id: id)
         markDirty()
         if activeItemID == id {
@@ -277,9 +316,14 @@ final class AppState {
         undoManager.registerUndo(withTarget: self) { target in
             if let exp = target.experiments.first(where: { $0.id == expID }) {
                 exp.dataTables.insert(removed, at: min(index, exp.dataTables.count))
-                target.activeItemID = removed.id
-                target.activeItemKind = .dataTable
+                target.activeItemID = prevItemID
+                target.activeItemKind = prevItemKind
                 target.markDirty()
+                // Register redo: remove again
+                target.undoManager.registerUndo(withTarget: target) { t in
+                    t.removeDataTable(id: id)
+                }
+                target.undoManager.setActionName("Remove Data Table")
             }
         }
         undoManager.setActionName("Remove Data Table")
@@ -299,6 +343,13 @@ final class AppState {
         activeItemID = graph.id
         activeItemKind = .graph
         markDirty()
+
+        let graphID = graph.id
+        undoManager.registerUndo(withTarget: self) { target in
+            target.removeGraph(id: graphID)
+        }
+        undoManager.setActionName("Add Graph")
+
         // Auto-generate the chart
         Task { @MainActor in
             await generatePlot()
@@ -311,6 +362,8 @@ final class AppState {
         guard let experiment = activeExperiment,
               let index = experiment.graphs.firstIndex(where: { $0.id == id }) else { return }
         let removed = experiment.graphs[index]
+        let prevItemID = activeItemID
+        let prevItemKind = activeItemKind
         experiment.removeGraph(id: id)
         markDirty()
         if activeItemID == id {
@@ -322,9 +375,14 @@ final class AppState {
         undoManager.registerUndo(withTarget: self) { target in
             if let exp = target.experiments.first(where: { $0.id == expID }) {
                 exp.graphs.insert(removed, at: min(index, exp.graphs.count))
-                target.activeItemID = removed.id
-                target.activeItemKind = .graph
+                target.activeItemID = prevItemID
+                target.activeItemKind = prevItemKind
                 target.markDirty()
+                // Register redo: remove again
+                target.undoManager.registerUndo(withTarget: target) { t in
+                    t.removeGraph(id: id)
+                }
+                target.undoManager.setActionName("Remove Graph")
             }
         }
         undoManager.setActionName("Remove Graph")
@@ -340,18 +398,45 @@ final class AppState {
         activeItemID = analysis.id
         activeItemKind = .analysis
         markDirty()
+
+        let analysisID = analysis.id
+        undoManager.registerUndo(withTarget: self) { target in
+            target.removeAnalysis(id: analysisID)
+        }
+        undoManager.setActionName("Add Analysis")
+
         return analysis
     }
 
     /// Remove an analysis from the active experiment.
     func removeAnalysis(id: UUID) {
-        guard let experiment = activeExperiment else { return }
+        guard let experiment = activeExperiment,
+              let index = experiment.analyses.firstIndex(where: { $0.id == id }) else { return }
+        let removed = experiment.analyses[index]
+        let prevItemID = activeItemID
+        let prevItemKind = activeItemKind
         experiment.removeAnalysis(id: id)
         markDirty()
         if activeItemID == id {
             activeItemID = experiment.dataTables.first?.id
             activeItemKind = .dataTable
         }
+
+        let expID = experiment.id
+        undoManager.registerUndo(withTarget: self) { target in
+            if let exp = target.experiments.first(where: { $0.id == expID }) {
+                exp.analyses.insert(removed, at: min(index, exp.analyses.count))
+                target.activeItemID = prevItemID
+                target.activeItemKind = prevItemKind
+                target.markDirty()
+                // Register redo: remove again
+                target.undoManager.registerUndo(withTarget: target) { t in
+                    t.removeAnalysis(id: id)
+                }
+                target.undoManager.setActionName("Remove Analysis")
+            }
+        }
+        undoManager.setActionName("Remove Analysis")
     }
 
     // MARK: - Selection
@@ -595,6 +680,15 @@ final class AppState {
         error = nil
         undoManager.removeAllActions()
         refreshUndoState()
+
+        // Start with one blank experiment (like Prism's fresh launch)
+        let experiment = Experiment.new(label: "Experiment 1")
+        experiments.append(experiment)
+        activeExperimentID = experiment.id
+        if let first = experiment.dataTables.first {
+            activeItemID = first.id
+            activeItemKind = .dataTable
+        }
     }
 
     // MARK: - Open .refract File

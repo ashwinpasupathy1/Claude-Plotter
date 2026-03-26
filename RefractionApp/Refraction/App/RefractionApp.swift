@@ -93,6 +93,25 @@ struct RefractionApp: App {
                 .keyboardShortcut("s", modifiers: [.command, .shift])
             }
 
+            // Edit menu: Undo/Redo
+            CommandGroup(replacing: .undoRedo) {
+                Button("Undo \(appState.undoManager.undoActionName)") {
+                    appState.undoManager.undo()
+                    appState.refreshUndoState()
+                    DebugLog.shared.logUI("undo (Cmd+Z)")
+                }
+                .keyboardShortcut("z", modifiers: .command)
+                .disabled(!appState.canUndo)
+
+                Button("Redo \(appState.undoManager.redoActionName)") {
+                    appState.undoManager.redo()
+                    appState.refreshUndoState()
+                    DebugLog.shared.logUI("redo (Cmd+Shift+Z)")
+                }
+                .keyboardShortcut("z", modifiers: [.command, .shift])
+                .disabled(!appState.canRedo)
+            }
+
             // Replace the default About menu item
             CommandGroup(replacing: .appInfo) {
                 Button("About Refraction") {
